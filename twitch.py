@@ -9,7 +9,6 @@ import aiohttp
 from twitchio.ext import commands
 
 # --- Constants ---
-CUSTOM_COMMANDS_FILE = 'custom_commands.json'
 MOJANG_API_URL = "https://mowojang.matdoes.dev/{username}"
 HYPIXEL_API_URL = "https://api.hypixel.net/v2/skyblock/profiles"
 HYPIXEL_AUCTION_URL = "https://api.hypixel.net/v2/skyblock/auction"
@@ -23,6 +22,7 @@ KUUDRA_TIERS_ORDER = ['none', 'hot', 'burning', 'fiery', 'infernal']
 KUUDRA_TIER_POINTS = {'none': 1, 'hot': 2, 'burning': 3, 'fiery': 4, 'infernal': 5}
 CLASS_NAMES = ['healer', 'mage', 'berserk', 'archer', 'tank']
 NUCLEUS_CRYSTALS = ['amber_crystal', 'topaz_crystal', 'amethyst_crystal', 'jade_crystal', 'sapphire_crystal']
+ESSENCE_TYPES = ['WITHER', 'DRAGON', 'DIAMOND', 'SPIDER', 'UNDEAD', 'GOLD', 'ICE', 'CRIMSON']
 
 MAX_MESSAGE_LENGTH = 480 # Approx limit to avoid Twitch cutting messages
 
@@ -35,8 +35,6 @@ class Bot(commands.Bot):
         self.start_time = datetime.now()
         self.hypixel_api_key = hypixel_api_key
         self.leveling_data = self._load_leveling_data()
-        # Load custom commands (implementation missing in provided snippet, assuming it exists)
-        # self.custom_commands = self._load_custom_commands()
 
         super().__init__(token=token, prefix=prefix, nick=nickname, initial_channels=initial_channels)
         print(f"[INFO] Bot initialized for channels: {initial_channels}")
@@ -526,8 +524,6 @@ class Bot(commands.Bot):
         # Process commands defined in this class
         await self.handle_commands(message)
 
-        # Handle custom commands (if implementation exists)
-        # await self.handle_custom_commands(message)
 
     # --- Commands ---
 
@@ -952,6 +948,47 @@ class Bot(commands.Bot):
             print(f"[ERROR][HotmCmd] Unexpected error processing HotM data: {e}")
             traceback.print_exc()
             await self._send_message(ctx, "An unexpected error occurred while fetching HotM level.")
+
+    @commands.command(name='essence')
+    async def essence_command(self, ctx: commands.Context, *, ign: str | None = None):
+        """Shows the player's essence amounts."""
+        profile_data = await self._get_player_profile_data(ctx, ign)
+        if not profile_data:
+            return
+
+        target_ign, player_uuid, latest_profile = profile_data
+        profile_name = latest_profile.get('cute_name', 'Unknown')
+
+        try:
+            member_data = latest_profile.get('members', {}).get(player_uuid, {})
+            currencies_data = member_data.get('currencies', {})
+
+            # Get the main essence container
+            all_essence_data = currencies_data.get('essence', {})
+
+            if not all_essence_data:
+                print(f"[INFO][EssenceCmd] No essence data found for {target_ign} in profile {profile_name}.")
+                return
+
+            essence_amounts = []
+            for essence_type in ESSENCE_TYPES:
+                # Access the specific essence type's dictionary
+                essence_type_data = all_essence_data.get(essence_type, {})
+                # Get the 'current' amount from within that dictionary
+                amount = essence_type_data.get('current', 0)
+
+                # Use capitalized full name
+                display_name = essence_type.capitalize() 
+                amount_str = self.format_price(amount)
+                essence_amounts.append(f"{display_name}: {amount_str}")
+
+            output_message = f"{target_ign}: { ' | '.join(essence_amounts) }"
+            await self._send_message(ctx, output_message)
+
+        except Exception as e:
+            print(f"[ERROR][EssenceCmd] Unexpected error processing essence data: {e}")
+            traceback.print_exc()
+            await self._send_message(ctx, "An unexpected error occurred while fetching essences.")
 
     # --- Cleanup ---
     async def close(self):
