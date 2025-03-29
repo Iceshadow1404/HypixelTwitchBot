@@ -2,60 +2,60 @@
 import os
 import asyncio
 from dotenv import load_dotenv
-from twitch import Bot # Importiert die Bot-Klasse aus twitch.py
+from twitch import Bot # Import the Bot class from twitch.py
 
-# --- Konfiguration laden ---
+# --- Load Configuration ---
 def load_config():
-    """Lädt Konfiguration aus der .env Datei und validiert sie."""
+    """Loads configuration from the .env file and validates it."""
     load_dotenv()
     config = {
         'token': os.getenv('TWITCH_OAUTH_TOKEN'),
         'nickname': os.getenv('TWITCH_NICKNAME'),
         # Read comma-separated channels instead of a single channel
         'twitch_channels_str': os.getenv('TWITCH_CHANNELS'), 
-        'prefix': '#', # Setzt das Prefix fest
+        'prefix': '#', # Set the command prefix
         'hypixel_api_key': os.getenv('HYPIXEL_API_KEY') 
     }
 
     if not config['token'] or not config['token'].startswith('oauth:'):
-        print("Fehler: TWITCH_OAUTH_TOKEN fehlt, ist ungültig oder beginnt nicht mit 'oauth:' in deiner .env Datei.")
-        print("Du kannst einen Token hier generieren: https://twitchapps.com/tmi/")
+        print("Error: TWITCH_OAUTH_TOKEN is missing, invalid, or does not start with 'oauth:' in your .env file.")
+        print("You can generate a token here: https://twitchapps.com/tmi/")
         return None
 
     if not config['nickname']:
-        print("Fehler: TWITCH_NICKNAME fehlt in deiner .env Datei.")
+        print("Error: TWITCH_NICKNAME is missing in your .env file.")
         return None
 
     # Validate and process the list of channels
     if not config['twitch_channels_str']:
-        print("Fehler: TWITCH_CHANNELS fehlt in deiner .env Datei.")
+        print("Error: TWITCH_CHANNELS is missing in your .env file.")
         return None
     
     # Split the string into a list, remove whitespace, and convert to lowercase
     initial_channels = [ch.strip().lower() for ch in config['twitch_channels_str'].split(',') if ch.strip()]
     if not initial_channels:
-        print("Fehler: TWITCH_CHANNELS enthält keine gültigen Kanalnamen.")
+        print("Error: TWITCH_CHANNELS contains no valid channel names.")
         return None
     config['initial_channels'] = initial_channels # Store the list
     del config['twitch_channels_str'] # Remove the original string
 
     if not config['hypixel_api_key']:  
-        print("Fehler: HYPIXEL_API_KEY fehlt in deiner .env Datei.")
-        print("Du kannst einen Schlüssel hier beantragen: https://developer.hypixel.net/")
-        print("Warnung: Bot startet ohne Hypixel API Funktionalität.")  
+        print("Error: HYPIXEL_API_KEY is missing in your .env file.")
+        print("You can request a key here: https://developer.hypixel.net/")
+        print("Warning: Bot starting without Hypixel API functionality.")  
 
     # Ensure nickname is lowercase
     config['nickname'] = config['nickname'].lower()
 
     return config
 
-# --- Hauptausführung ---
+# --- Main Execution ---
 if __name__ == "__main__":
     config = load_config()
 
     if config:
-        print(f"Konfiguration geladen. Bot wird versuchen, Kanälen beizutreten: {config['initial_channels']}")
-        print("Starte Bot...")
+        print(f"Configuration loaded. Bot will attempt to join channels: {config['initial_channels']}")
+        print("Starting Bot...")
         # Pass the list of channels to the Bot constructor
         bot = Bot(
             token=config['token'],
@@ -67,9 +67,9 @@ if __name__ == "__main__":
         try:
             bot.run()
         except Exception as e:
-            print(f"Ein Fehler ist beim Starten oder während des Betriebs des Bots aufgetreten: {e}")
+            print(f"An error occurred while starting or running the bot: {e}")
             if "Authentication failed" in str(e):
-                 print("-> Überprüfe dein TWITCH_OAUTH_TOKEN in der .env Datei.")
+                 print("-> Check your TWITCH_OAUTH_TOKEN in the .env file.")
     else:
-        print("Bot konnte aufgrund fehlender oder fehlerhafter Konfiguration nicht gestartet werden.")
+        print("Bot could not be started due to missing or faulty configuration.")
         exit(1)

@@ -183,7 +183,7 @@ class Bot(commands.Bot):
     async def _get_player_profile_data(self, ctx: commands.Context, ign: str | None) -> tuple[str, str, dict] | None:
         """
         Handles the common boilerplate for commands needing player profile data.
-        Checks API key, session, gets UUID, fetches profiles, finds latest profile.
+        Checks API key, gets UUID, fetches profiles, finds latest profile.
         Sends error messages to chat if steps fail.
         Returns (target_ign, player_uuid, latest_profile_data) or None if an error occurred.
         """
@@ -193,7 +193,7 @@ class Bot(commands.Bot):
 
         target_ign = ign if ign else ctx.author.name
         target_ign = target_ign.lstrip('@')
-        await ctx.send(f"Searching data for '{target_ign}'...") # Generic initial message
+        await ctx.send(f"Searching data for '{target_ign}'...")
 
         player_uuid = await self._get_uuid_from_ign(target_ign)
         if not player_uuid:
@@ -747,11 +747,11 @@ class Bot(commands.Bot):
     async def mayor_command(self, ctx: commands.Context):
         """Shows the current SkyBlock Mayor and Minister."""
         if not self.hypixel_api_key:
-            await self._send_message(ctx, "Error connecting to external APIs.")
+            await ctx.send("Hypixel API Key is not configured.")
             return
 
         print(f"[DEBUG][API] Fetching SkyBlock election data from {HYPIXEL_ELECTION_URL}")
-        await ctx.send("Fetching current SkyBlock Mayor...") # Initial feedback
+        await ctx.send("Fetching current SkyBlock Mayor...")
 
         try:
             async with aiohttp.ClientSession() as session:
@@ -860,7 +860,7 @@ class Bot(commands.Bot):
             nucleus_result = sum_total_placed // 5
             print(f"[DEBUG][NucleusCmd] Sum: {sum_total_placed}, Result (Sum // 5): {nucleus_result}")
 
-            await self._send_message(ctx, f"{target_ign}'s nucleus runs: {nucleus_result})")
+            await self._send_message(ctx, f"{target_ign}'s nucleus runs: {nucleus_result} (Profile: '{profile_name}')") # Added profile name back
 
         except Exception as e:
             print(f"[ERROR][NucleusCmd] Unexpected error processing nucleus data: {e}")
