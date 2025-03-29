@@ -738,6 +738,110 @@ class Bot(commands.Bot):
             traceback.print_exc()
             await ctx.send(f"An unexpected error occurred while fetching SkyBlock level. Please try again later.")
 
+    def calculate_class_level(self, xp: float) -> float:
+        """Calculates the class level based on XP using the Catacombs XP table up to level 50."""
+        if 'catacombs_xp' not in self.leveling_data or not self.leveling_data['catacombs_xp']:
+            print("[Log][Error] Catacombs XP table not found or empty for class level calculation.")
+            return 0.0
+            
+        max_class_level = 50
+        # Use only the first 50 entries from the Catacombs XP table
+        xp_table = self.leveling_data['catacombs_xp'][:max_class_level]
+        
+        # Calculate total XP required for max class level (50)
+        total_xp_for_max_level = sum(xp_table)
+        
+        # If XP is higher than required for level 50, return 50.0
+        if xp >= total_xp_for_max_level:
+            return float(max_class_level)
+            
+        # Find level based on XP
+        total_xp_required = 0
+        level = 0
+        
+        for required_xp in xp_table: 
+            total_xp_required += required_xp
+            if xp >= total_xp_required:
+                level += 1
+            else:
+                # Calculate progress to next level
+                current_level_xp = total_xp_required - required_xp
+                next_level_xp = total_xp_required
+                # Avoid division by zero
+                if next_level_xp - current_level_xp == 0:
+                    progress = 0.0
+                else:
+                    progress = (xp - current_level_xp) / (next_level_xp - current_level_xp)
+                
+                # Return level + progress as a single float
+                return level + progress
+                
+        # Should only be reached if xp exactly matches total xp for a level < 50
+        return float(level) 
+
+    @commands.command(name='classaverage', aliases=['ca'])
+    async def classaverage_command(self, ctx: commands.Context, *, ign: str | None = None):
+        """Shows the player's dungeon class levels and their average."""
+        if not self.hypixel_api_key:
+            await ctx.send("Hypixel API is not configured. Please check the .env file.")
+            return
+
+        if not self.http_session or self.http_session.closed:
+            await ctx.send("Error connecting to external APIs. Please try again later.")
+            return
+
+        target_ign = ign if ign else ctx.author.name
+        target_ign = target_ign.lstrip('@')
+        await ctx.send(f"Searching class levels for '{target_ign}'...")
+        
+        try:
+            player_uuid = await self.get_uuid_from_ign(target_ign)
+            if not player_uuid:
+                await ctx.send(f"Could not find Minecraft account for '{target_ign}'. Please check the username.")
+                return
+
+            profiles = await self.get_skyblock_data(player_uuid)
+            if profiles is None:
+                await ctx.send(f"Could not fetch SkyBlock profiles for '{target_ign}'. Player might be offline or has no profiles.")
+                return
+            if not profiles:
+                await ctx.send(f"'{target_ign}' seems to have no SkyBlock profiles yet.")
+                return
+
+            latest_profile = self.find_latest_profile(profiles, player_uuid)
+            if not latest_profile:
+                await ctx.send(f"Could not find an active profile for '{target_ign}'. Player must be a member of at least one profile.")
+                return
+
+            profile_name = latest_profile.get('cute_name', 'Unknown')
+            member_data = latest_profile.get('members', {}).get(player_uuid, {})
+            dungeons_data = member_data.get('dungeons', {})
+            player_classes_data = dungeons_data.get('player_classes', {})
+
+            class_levels = {}
+            total_level = 0
+            class_names = ['healer', 'mage', 'berserk', 'archer', 'tank']
+
+            if not player_classes_data:
+                 await ctx.send(f"'{target_ign}' has no class data in profile '{profile_name}'.")
+                 return
+
+            for class_name in class_names:
+                class_xp = player_classes_data.get(class_name, {}).get('experience', 0)
+                level = self.calculate_class_level(class_xp)
+                class_levels[class_name.capitalize()] = level
+                total_level += level
+            
+            average_level = total_level / len(class_names) if class_names else 0
+
+            levels_str = " | ".join([f"{name} {lvl:.2f}" for name, lvl in class_levels.items()])
+            await ctx.send(f"{target_ign}'s class levels in profile '{profile_name}': {levels_str} | Average: {average_level:.2f}")
+
+        except Exception as e:
+            print(f"[Log][Error][classaverage] Unexpected error: {e}")
+            traceback.print_exc()
+            await ctx.send(f"An unexpected error occurred while fetching class levels. Please try again later.")
+
     # --- Cleanup ---
     async def close(self):
         print("[Log] Bot wird heruntergefahren...")
