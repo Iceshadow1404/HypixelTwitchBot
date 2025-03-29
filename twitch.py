@@ -79,13 +79,15 @@ class Bot(commands.Bot):
         try:
             with open('leveling.json', 'r', encoding='utf-8') as f:
                 data = json.load(f)
+                print(f"[Log][Leveling] Loaded leveling data. Catacombs XP table length: {len(data.get('catacombs', []))}")
                 return {
                     'xp_table': data.get('leveling_xp', []),
-                    'level_caps': data.get('leveling_caps', {})
+                    'level_caps': data.get('leveling_caps', {}),
+                    'catacombs_xp': data.get('catacombs', [])
                 }
         except Exception as e:
-            print(f"[Log][Error] Fehler beim Laden der leveling.json: {e}")
-            return {'xp_table': [], 'level_caps': {}}
+            print(f"[Log][Error] Error loading leveling.json: {e}")
+            return {'xp_table': [], 'level_caps': {}, 'catacombs_xp': []}
 
     def calculate_skill_level(self, xp: float, skill_name: str, member_data: dict | None = None) -> float:
         """Berechnet das Level eines Skills basierend auf der XP und den Leveling-Daten."""
@@ -638,9 +640,95 @@ class Bot(commands.Bot):
         except Exception as e:
             await ctx.send(f"An unexpected error occurred. Please try again later.")
 
+    @commands.command(name='dungeon', aliases=['dungeons'])
+    async def dungeon_command(self, ctx: commands.Context, *, ign: str | None = None):
+        """Shows the Catacombs level for a player."""
+        if not self.hypixel_api_key:
+            await ctx.send("Hypixel API is not configured. Please check the .env file.")
+            return
+
+        if not self.http_session or self.http_session.closed:
+            await ctx.send("Error connecting to external APIs. Please try again later.")
+            return
+
+        target_ign = ign if ign else ctx.author.name
+        target_ign = target_ign.lstrip('@')
+        await ctx.send(f"Searching Catacombs level for '{target_ign}'...")
+        
+        try:
+            player_uuid = await self.get_uuid_from_ign(target_ign)
+            if not player_uuid:
+                await ctx.send(f"Could not find Minecraft account for '{target_ign}'. Please check the username.")
+                return
+
+            profiles = await self.get_skyblock_data(player_uuid)
+            if profiles is None:
+                await ctx.send(f"Could not fetch SkyBlock profiles for '{target_ign}'. Player might be offline or has no profiles.")
+                return
+            if not profiles:
+                await ctx.send(f"'{target_ign}' seems to have no SkyBlock profiles yet.")
+                return
+
+            latest_profile = self.find_latest_profile(profiles, player_uuid)
+            if not latest_profile:
+                await ctx.send(f"Could not find an active profile for '{target_ign}'. Player must be a member of at least one profile.")
+                return
+
+            profile_name = latest_profile.get('cute_name', 'Unknown')
+            member_data = latest_profile.get('members', {}).get(player_uuid, {})
+            dungeons_data = member_data.get('dungeons', {})
+            dungeon_types = dungeons_data.get('dungeon_types', {})
+            catacombs_data = dungeon_types.get('catacombs', {})
+            catacombs_xp = catacombs_data.get('experience', 0)
+            
+            level = self.calculate_dungeon_level(catacombs_xp)
+            await ctx.send(f"{target_ign}'s Catacombs level in profile '{profile_name}' is {level:.2f} (XP: {catacombs_xp:,.0f})")
+
+        except Exception as e:
+            await ctx.send(f"An unexpected error occurred. Please try again later.")
+
     # --- Cleanup ---
     async def close(self):
         print("[Log] Bot wird heruntergefahren...")
         await self.close_http_session()
         await super().close()
         print("[Log] Bot-Verbindung geschlossen.")
+
+    def calculate_dungeon_level(self, xp: float) -> float:
+        """Calculates the Catacombs level based on XP, including progress as decimal points."""
+        if not self.leveling_data['catacombs_xp']:
+            return 0.0
+            
+        max_level = 100  # Catacombs has a max level of 100
+        xp_table = self.leveling_data['catacombs_xp']
+        
+        # Calculate total XP for max level
+        total_xp = sum(xp_table)
+        
+        # If XP is higher than max XP in table, return max_level
+        if xp >= total_xp:
+            return float(max_level)
+            
+        # Find level based on XP
+        total_xp_required = 0
+        level = 0
+        
+        for required_xp in xp_table:
+            total_xp_required += required_xp
+            if xp >= total_xp_required:
+                level += 1
+            else:
+                # Calculate progress to next level
+                current_level_xp = total_xp_required - required_xp
+                next_level_xp = total_xp_required
+                # Avoid division by zero if required_xp is 0 for some reason
+                if next_level_xp - current_level_xp == 0:
+                    progress = 0.0
+                else:
+                    progress = (xp - current_level_xp) / (next_level_xp - current_level_xp)
+                
+                # Return level + progress as a single float
+                return level + progress
+                
+        # Should theoretically not be reached if xp < total_xp, but return level just in case
+        return float(level)
