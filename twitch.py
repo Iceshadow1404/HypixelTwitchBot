@@ -957,6 +957,70 @@ class Bot(commands.Bot):
             traceback.print_exc()
             await ctx.send(f"An unexpected error occurred while fetching balance information.")
 
+    @commands.command(name='nucleus')
+    async def nucleus_command(self, ctx: commands.Context, *, ign: str | None = None):
+        """Shows the number of Nucleus runs completed by the player."""
+        if not self.hypixel_api_key:
+            await ctx.send("Hypixel API is not configured. Please check the .env file.")
+            return
+
+        if not self.http_session or self.http_session.closed:
+            await ctx.send("Error connecting to external APIs. Please try again later.")
+            return
+
+        target_ign = ign if ign else ctx.author.name
+        target_ign = target_ign.lstrip('@')
+        await ctx.send(f"Searching Nucleus runs for '{target_ign}'...")
+        
+        try:
+            player_uuid = await self.get_uuid_from_ign(target_ign)
+            if not player_uuid:
+                await ctx.send(f"Could not find Minecraft account for '{target_ign}'. Please check the username.")
+                return
+
+            profiles = await self.get_skyblock_data(player_uuid)
+            if profiles is None:
+                await ctx.send(f"Could not fetch SkyBlock profiles for '{target_ign}'. Player might be offline or has no profiles.")
+                return
+            if not profiles:
+                await ctx.send(f"'{target_ign}' seems to have no SkyBlock profiles yet.")
+                return
+
+            latest_profile = self.find_latest_profile(profiles, player_uuid)
+            if not latest_profile:
+                await ctx.send(f"Could not find an active profile for '{target_ign}'. Player must be a member of at least one profile.")
+                return
+
+            profile_name = latest_profile.get('cute_name', 'Unknown')
+            member_data = latest_profile.get('members', {}).get(player_uuid, {})
+            
+            # Corrected path for crystal data
+            mining_core_data = member_data.get('mining_core', {})
+            crystals_data = mining_core_data.get('crystals', {})
+            
+            # List of crystals to check (updated)
+            target_crystals = ['amber_crystal', 'topaz_crystal', 'amethyst_crystal', 'jade_crystal', 'sapphire_crystal']
+            sum_total_placed = 0
+            
+            for crystal_key in target_crystals:
+                crystal_info = crystals_data.get(crystal_key, {})
+                total_placed = crystal_info.get('total_placed', 0)
+                sum_total_placed += total_placed
+                # Optional: Add debug print if needed
+                print(f"[Log][Debug][nucleus] Crystal: {crystal_key}, Placed: {total_placed}")
+            
+            # Calculate result: sum divided by 5, rounded down
+            nucleus_result = sum_total_placed // 5
+            print(f"[Log][Debug][nucleus] Sum: {sum_total_placed}, Result (Sum // 5): {nucleus_result}")
+
+            # Using the term 'nucleus runs' as requested for the output
+            await ctx.send(f"{target_ign}'s nucleus runs: {nucleus_result} (Profile: '{profile_name}')")
+
+        except Exception as e:
+            print(f"[Log][Error][nucleus] Unexpected error: {e}")
+            traceback.print_exc()
+            await ctx.send(f"An unexpected error occurred while fetching Nucleus runs.")
+
     # --- Cleanup ---
     async def close(self):
         print("[Log] Bot wird heruntergefahren...")
