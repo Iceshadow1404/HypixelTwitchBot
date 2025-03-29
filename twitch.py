@@ -842,6 +842,59 @@ class Bot(commands.Bot):
             traceback.print_exc()
             await ctx.send(f"An unexpected error occurred while fetching class levels. Please try again later.")
 
+    @commands.command(name='mayor')
+    async def mayor_command(self, ctx: commands.Context):
+        """Shows the current SkyBlock Mayor and their perks."""
+        if not self.http_session or self.http_session.closed:
+            await ctx.send("Error connecting to external APIs. Please try again later.")
+            return
+
+        election_url = "https://api.hypixel.net/v2/resources/skyblock/election"
+        print(f"[Log][API] Fetching SkyBlock election data from {election_url}")
+        await ctx.send("Fetching current SkyBlock Mayor...")
+        
+        try:
+            async with self.http_session.get(election_url) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data.get("success"):
+                        mayor_data = data.get('mayor')
+                        if mayor_data:
+                            mayor_name = mayor_data.get('name', 'Unknown')
+                            perks = mayor_data.get('perks', [])
+                            perk_names = [perk.get('name', '') for perk in perks if perk.get('name')]
+                            num_perks = len(perk_names)
+                            perks_str = " | ".join(perk_names)
+                            
+                            # Extract Minister info
+                            minister_data = mayor_data.get('minister')
+                            minister_str = ""
+                            if minister_data:
+                                minister_name = minister_data.get('name', 'Unknown')
+                                minister_perk = minister_data.get('perk', {}).get('name', 'Unknown Perk')
+                                minister_str = f" | Minister: {minister_name} ({minister_perk})"
+                            
+                            # Combine output
+                            output_message = f"Current skyblock mayor is {num_perks} perk {mayor_name} ({perks_str}){minister_str}"
+                            await ctx.send(output_message)
+                        else:
+                            await ctx.send("Could not find current mayor data in the API response.")
+                    else:
+                        await ctx.send("API request failed. Could not fetch election data.")
+                else:
+                    await ctx.send(f"Error fetching election data. API returned status {response.status}.")
+
+        except aiohttp.ClientError as e:
+            print(f"[Log][API][Error] Network error fetching election data: {e}")
+            await ctx.send("Network error while fetching election data.")
+        except json.JSONDecodeError:
+             print(f"[Log][API][Error] Failed to parse JSON from election API.")
+             await ctx.send("Error parsing election data from API.")
+        except Exception as e:
+            print(f"[Log][Error][mayor] Unexpected error: {e}")
+            traceback.print_exc()
+            await ctx.send(f"An unexpected error occurred while fetching mayor information.")
+
     # --- Cleanup ---
     async def close(self):
         print("[Log] Bot wird heruntergefahren...")
