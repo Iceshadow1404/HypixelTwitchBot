@@ -48,22 +48,22 @@ class Bot(commands.Bot):
         try:
             with open('leveling.json', 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                print(f"[INFO] Loaded leveling data. Catacombs XP table length: {len(data.get('catacombs', []))}")
                 return {
                     'xp_table': data.get('leveling_xp', []),
                     'level_caps': data.get('leveling_caps', {}),
-                    'catacombs_xp': data.get('catacombs', [])
+                    'catacombs_xp': data.get('catacombs', []),
+                    'hotm_brackets': data.get('HOTM', [])
                 }
         except FileNotFoundError:
             print("[ERROR] leveling.json not found. Level calculations will fail.")
-            return {'xp_table': [], 'level_caps': {}, 'catacombs_xp': []}
+            return {'xp_table': [], 'level_caps': {}, 'catacombs_xp': [], 'hotm_brackets': []}
         except json.JSONDecodeError as e:
              print(f"[ERROR] Error decoding leveling.json: {e}. Level calculations will fail.")
-             return {'xp_table': [], 'level_caps': {}, 'catacombs_xp': []}
+             return {'xp_table': [], 'level_caps': {}, 'catacombs_xp': [], 'hotm_brackets': []}
         except Exception as e:
             print(f"[ERROR] Unexpected error loading leveling.json: {e}")
             traceback.print_exc()
-            return {'xp_table': [], 'level_caps': {}, 'catacombs_xp': []}
+            return {'xp_table': [], 'level_caps': {}, 'catacombs_xp': [], 'hotm_brackets': []}
 
     def _find_latest_profile(self, profiles: list, player_uuid: str) -> dict | None:
         """Finds the most recently played profile for a player from a list of profiles."""
@@ -270,6 +270,62 @@ class Bot(commands.Bot):
         # If loop finishes, player is exactly max level or below
         return min(float(level), float(effective_max_level))
 
+    def calculate_hotm_level(self, xp: float) -> float:
+        """Calculates the Heart of the Mountain level based on cumulative XP per level.
+        Assumes 'hotm_brackets' in leveling_data contains XP needed for each level.
+        """
+        # print(f"\n[DEBUG][Calc][HotM] Calculating HotM Level for XP: {xp:,.0f}") # Start Calculation Log (Removed)
+        if 'hotm_brackets' not in self.leveling_data or not self.leveling_data['hotm_brackets']:
+            print("[WARN][Calc][HotM] HOTM XP requirements (hotm_brackets) not loaded.")
+            return 0.0
+        
+        xp_per_level = self.leveling_data['hotm_brackets']
+        max_level = len(xp_per_level) # Max level is determined by the length of the list
+        # print(f"[DEBUG][Calc][HotM] Max Level (based on brackets): {max_level}") # Removed
+        
+        # Calculate total XP needed for max level
+        total_xp_for_max = sum(xp_per_level)
+        # print(f"[DEBUG][Calc][HotM] Total XP for Max Level: {total_xp_for_max:,.0f}") # Removed
+
+        if xp >= total_xp_for_max:
+            # print(f"[DEBUG][Calc][HotM] XP >= Total XP for Max. Returning Max Level: {max_level}") # Removed
+            return float(max_level)
+
+        # Find level based on cumulative XP progression
+        total_xp_required = 0
+        level = 0
+        # print("[DEBUG][Calc][HotM] --- Iterating through levels ---") # Removed
+        for i, required_xp in enumerate(xp_per_level):
+            current_level_xp_threshold = total_xp_required # XP needed to START this level (cumulative sum BEFORE adding current level)
+            # level_num_being_checked = i + 1 # Current level number (1-based)
+            # print(f"[DEBUG][Calc][HotM] Checking Level {level_num_being_checked}: Needs {required_xp:,.0f} XP. Total XP needed to finish: {total_xp_required + required_xp:,.0f}") # Removed
+            
+            total_xp_required += required_xp # XP needed to FINISH this level (cumulative sum AFTER adding current level)
+
+            if xp >= total_xp_required:
+                level += 1
+                # print(f"[DEBUG][Calc][HotM] -> Level {level_num_being_checked} COMPLETED. Current full level: {level}") # Removed
+            else:
+                # print(f"[DEBUG][Calc][HotM] -> Level {level_num_being_checked} NOT completed. Calculating progress...") # Removed
+                # Calculate progress within the current level
+                xp_in_level = xp - current_level_xp_threshold
+                xp_needed_for_level = required_xp # This is the amount for the current level (i)
+                # print(f"[DEBUG][Calc][HotM]    XP Threshold for this level: {current_level_xp_threshold:,.0f}") # Removed
+                # print(f"[DEBUG][Calc][HotM]    XP into this level: {xp_in_level:,.0f}") # Removed
+                # print(f"[DEBUG][Calc][HotM]    XP needed for this level: {xp_needed_for_level:,.0f}") # Removed
+                if xp_needed_for_level > 0:
+                    progress = xp_in_level / xp_needed_for_level
+                    final_level = level + progress
+                    # print(f"[DEBUG][Calc][HotM]    Progress: {progress:.4f}") # Removed
+                    # print(f"[DEBUG][Calc][HotM]    Final Calculated Level: {final_level:.4f}") # Removed
+                    return final_level 
+                else: # Avoid division by zero
+                    # print(f"[DEBUG][Calc][HotM]    XP needed for level is 0. Returning integer level: {level}") # Removed
+                    return float(level)
+
+        # If loop completes, player has exactly reached a level threshold
+        # print(f"[DEBUG][Calc][HotM] Loop completed. Returning integer level: {level}") # Removed
+        return float(level)
 
     def calculate_average_skill_level(self, profile: dict, player_uuid: str) -> float | None:
         """Calculates the average skill level, excluding cosmetics like Carpentry and Runecrafting if desired."""
@@ -873,6 +929,29 @@ class Bot(commands.Bot):
         test_message = f"Simple test response for #{ctx.channel.name} at {datetime.now()}"
         print(f"[DEBUG][TestSendCmd] Attempting send: {test_message}")
         await self._send_message(ctx, test_message) # Use the helper send method
+
+    @commands.command(name='hotm')
+    async def hotm_command(self, ctx: commands.Context, *, ign: str | None = None):
+        """Shows the player's Heart of the Mountain level."""
+        profile_data = await self._get_player_profile_data(ctx, ign)
+        if not profile_data:
+            return
+
+        target_ign, player_uuid, latest_profile = profile_data
+        profile_name = latest_profile.get('cute_name', 'Unknown')
+
+        try:
+            member_data = latest_profile.get('members', {}).get(player_uuid, {})
+            mining_core_data = member_data.get('mining_core', {})
+            hotm_xp = mining_core_data.get('experience', 0.0)
+
+            level = self.calculate_hotm_level(hotm_xp)
+            await self._send_message(ctx, f"{target_ign}'s HotM level is {level:.2f} (XP: {hotm_xp:,.0f})")
+
+        except Exception as e:
+            print(f"[ERROR][HotmCmd] Unexpected error processing HotM data: {e}")
+            traceback.print_exc()
+            await self._send_message(ctx, "An unexpected error occurred while fetching HotM level.")
 
     # --- Cleanup ---
     async def close(self):
