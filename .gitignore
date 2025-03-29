@@ -1,0 +1,4 @@
+*.json
+!leveling.json
+.env
+.idea/

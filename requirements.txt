@@ -1,0 +1,3 @@
+twitchio
+aiohttp
+python-dotenv
