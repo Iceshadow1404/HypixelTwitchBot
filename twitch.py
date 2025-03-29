@@ -1,1057 +1,882 @@
 # twitch.py
 import asyncio
-from twitchio.ext import commands
 import json
 import os
-import aiohttp
 import traceback
-import time
 from datetime import datetime
-# No longer need SimpleNamespace if using handle_commands
-# from types import SimpleNamespace
 
-# --- Konstanten ---
-# (Constants remain the same)
+import aiohttp
+from twitchio.ext import commands
+
+# --- Constants ---
 CUSTOM_COMMANDS_FILE = 'custom_commands.json'
-MOJANG_API_URL = "https://api.mojang.com/users/profiles/minecraft/{username}"
+MOJANG_API_URL = "https://mowojang.matdoes.dev/{username}"
 HYPIXEL_API_URL = "https://api.hypixel.net/v2/skyblock/profiles"
+HYPIXEL_AUCTION_URL = "https://api.hypixel.net/v2/skyblock/auction"
+HYPIXEL_ELECTION_URL = "https://api.hypixel.net/v2/resources/skyblock/election"
+
 AVERAGE_SKILLS_LIST = [
     'farming', 'mining', 'combat', 'foraging', 'fishing',
     'enchanting', 'alchemy', 'taming', 'carpentry'
 ]
+KUUDRA_TIERS_ORDER = ['none', 'hot', 'burning', 'fiery', 'infernal']
+KUUDRA_TIER_POINTS = {'none': 1, 'hot': 2, 'burning': 3, 'fiery': 4, 'infernal': 5}
+CLASS_NAMES = ['healer', 'mage', 'berserk', 'archer', 'tank']
+NUCLEUS_CRYSTALS = ['amber_crystal', 'topaz_crystal', 'amethyst_crystal', 'jade_crystal', 'sapphire_crystal']
+
+MAX_MESSAGE_LENGTH = 480 # Approx limit to avoid Twitch cutting messages
 
 class Bot(commands.Bot):
-    # __init__, start/close_http_session, _load_custom_commands, API helpers,
-    # calculate_average_skill_level, find_latest_profile
-    # remain the same as the previous version with enhanced logging.
-    # Add them back here or ensure they are present in your file.
-
-    # --- PASTE PREVIOUS METHODS HERE ---
+    """
+    Twitch Bot for interacting with Hypixel SkyBlock API and providing commands.
+    """
     def __init__(self, token: str, prefix: str, nickname: str, initial_channels: list[str], hypixel_api_key: str | None):
-        """Initialisiert den Bot."""
+        """Initializes the Bot."""
         self.start_time = datetime.now()
         self.hypixel_api_key = hypixel_api_key
-        self.http_session: aiohttp.ClientSession | None = None
         self.leveling_data = self._load_leveling_data()
+        # Load custom commands (implementation missing in provided snippet, assuming it exists)
+        # self.custom_commands = self._load_custom_commands()
 
         super().__init__(token=token, prefix=prefix, nick=nickname, initial_channels=initial_channels)
-        print(f"[Log] Bot initialisiert für Kanäle: {initial_channels}")
+        print(f"[INFO] Bot initialized for channels: {initial_channels}")
 
-    async def start_http_session(self):
-        if self.http_session is None or self.http_session.closed:
-            self.http_session = aiohttp.ClientSession()
-            print("aiohttp Session gestartet.")
-
-    async def close_http_session(self):
-        if self.http_session and not self.http_session.closed:
-            await self.http_session.close()
-            print("aiohttp Session geschlossen.")
-            self.http_session = None
-
-    def _load_custom_commands(self):
-        if not os.path.exists(CUSTOM_COMMANDS_FILE):
-             print(f"Warnung: Datei für benutzerdefinierte Befehle '{CUSTOM_COMMANDS_FILE}' nicht gefunden. Erstelle eine leere Datei.")
-             try:
-                 with open(CUSTOM_COMMANDS_FILE, 'w', encoding='utf-8') as f:
-                     json.dump({}, f)
-             except IOError as e:
-                 print(f"Fehler beim Erstellen der Datei '{CUSTOM_COMMANDS_FILE}': {e}")
-             return
-
-        try:
-            with open(CUSTOM_COMMANDS_FILE, 'r', encoding='utf-8') as f:
-                loaded_commands = json.load(f)
-                self.custom_commands = {k.lower(): v for k, v in loaded_commands.items()}
-                print(f"{len(self.custom_commands)} benutzerdefinierte Befehle aus '{CUSTOM_COMMANDS_FILE}' geladen.")
-        except json.JSONDecodeError as e:
-            print(f"Fehler beim Parsen der JSON-Datei '{CUSTOM_COMMANDS_FILE}': {e}")
-            print("Bitte überprüfe die Syntax der Datei. Benutzerdefinierte Befehle werden nicht geladen.")
-        except IOError as e:
-            print(f"Fehler beim Lesen der Datei '{CUSTOM_COMMANDS_FILE}': {e}")
-            return
+    # --- Helper Methods ---
 
     def _load_leveling_data(self) -> dict:
-        """Lädt die Leveling-Daten aus der leveling.json Datei."""
+        """Loads leveling data from leveling.json."""
         try:
             with open('leveling.json', 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                print(f"[Log][Leveling] Loaded leveling data. Catacombs XP table length: {len(data.get('catacombs', []))}")
+                print(f"[INFO] Loaded leveling data. Catacombs XP table length: {len(data.get('catacombs', []))}")
                 return {
                     'xp_table': data.get('leveling_xp', []),
                     'level_caps': data.get('leveling_caps', {}),
                     'catacombs_xp': data.get('catacombs', [])
                 }
+        except FileNotFoundError:
+            print("[ERROR] leveling.json not found. Level calculations will fail.")
+            return {'xp_table': [], 'level_caps': {}, 'catacombs_xp': []}
+        except json.JSONDecodeError as e:
+             print(f"[ERROR] Error decoding leveling.json: {e}. Level calculations will fail.")
+             return {'xp_table': [], 'level_caps': {}, 'catacombs_xp': []}
         except Exception as e:
-            print(f"[Log][Error] Error loading leveling.json: {e}")
+            print(f"[ERROR] Unexpected error loading leveling.json: {e}")
+            traceback.print_exc()
             return {'xp_table': [], 'level_caps': {}, 'catacombs_xp': []}
 
+    def _find_latest_profile(self, profiles: list, player_uuid: str) -> dict | None:
+        """Finds the most recently played profile for a player from a list of profiles."""
+        print(f"[DEBUG][Profile] Searching profile for UUID {player_uuid} from {len(profiles)} profiles.")
+        if not profiles:
+            print("[DEBUG][Profile] No profiles to search.")
+            return None
+
+        # Check for 'selected' profile first
+        for profile in profiles:
+            cute_name = profile.get('cute_name', 'Unknown')
+            if profile.get('selected', False) and player_uuid in profile.get('members', {}):
+                print(f"[DEBUG][Profile] Found selected profile: '{cute_name}'")
+                return profile
+
+        # If no 'selected' profile, find the one with the latest 'last_save' for the member
+        latest_profile = None
+        latest_save = 0
+        for profile in profiles:
+            cute_name = profile.get('cute_name', 'Unknown')
+            member_data = profile.get('members', {}).get(player_uuid)
+            if member_data:
+                last_save = member_data.get('last_save', 0)
+                if last_save > latest_save:
+                    latest_save = last_save
+                    latest_profile = profile
+                    print(f"[DEBUG][Profile] Found newer profile: '{cute_name}' (Last Save: {last_save})")
+
+        if latest_profile:
+            print(f"[DEBUG][Profile] Latest profile selected: '{latest_profile.get('cute_name')}'")
+            return latest_profile
+
+        print(f"[DEBUG][Profile] No suitable profile found for UUID {player_uuid}.")
+        return None
+
+    async def _get_uuid_from_ign(self, username: str) -> str | None:
+        """Gets the Minecraft UUID for a given username using Mojang API."""
+        url = MOJANG_API_URL.format(username=username)
+        print(f"[DEBUG][API] Mojang request for '{username}'...")
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        uuid = data.get('id')
+                        if not uuid:
+                            print(f"[WARN][API] Mojang API: No UUID found for '{username}'.")
+                        return uuid
+                    elif response.status == 204: # No content -> User not found
+                        print(f"[WARN][API] Mojang API: Username '{username}' not found.")
+                        return None
+                    else:
+                        print(f"[ERROR][API] Mojang API error: Status {response.status}")
+                        return None
+        except aiohttp.ClientError as e:
+            print(f"[ERROR][API] Network error during Mojang API request: {e}")
+            return None
+        except Exception as e:
+            print(f"[ERROR][API] Unexpected error during Mojang API request: {e}")
+            traceback.print_exc()
+            return None
+
+    async def _get_skyblock_data(self, uuid: str) -> list | None:
+        """Gets SkyBlock profile data for a given UUID using Hypixel API."""
+        if not self.hypixel_api_key:
+            print("[ERROR][API] Hypixel API Key not configured.")
+            return None
+
+        params = {"key": self.hypixel_api_key, "uuid": uuid}
+        print(f"[DEBUG][API] Hypixel profiles request for UUID '{uuid}'...")
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(HYPIXEL_API_URL, params=params) as response:
+                    print(f"[DEBUG][API] Hypixel profiles response status: {response.status}")
+                    response_text = await response.text() # Read text first for debugging
+                    if response.status == 200:
+                        try:
+                            data = json.loads(response_text)
+                            # Save the full response for debugging
+                            debug_file = f"hypixel_response_{uuid}.json"
+                            try:
+                                with open(debug_file, 'w', encoding='utf-8') as f:
+                                    json.dump(data, f, indent=4)
+                                print(f"[DEBUG][API] Hypixel response saved to '{debug_file}'.")
+                            except IOError as io_err:
+                                 print(f"[WARN][API] Failed to save debug file '{debug_file}': {io_err}")
+
+                            if data.get("success"):
+                                profiles = data.get('profiles')
+                                if profiles is None:
+                                     print(f"[WARN][API] Hypixel API success, but 'profiles' field is missing or null for {uuid}.")
+                                     return [] # Return empty list instead of None if success=true but no profiles
+                                if not isinstance(profiles, list):
+                                    print(f"[ERROR][API] Hypixel API success, but 'profiles' is not a list ({type(profiles)}).")
+                                    return None
+                                return profiles
+                            else:
+                                reason = data.get('cause', 'Unknown reason')
+                                print(f"[ERROR][API] Hypixel API request failed: {reason}")
+                                return None
+                        except json.JSONDecodeError as json_e:
+                            print(f"[ERROR][API] Error decoding Hypixel JSON response: {json_e}")
+                            print(f"--- Response Text Start ---\n{response_text}\n--- Response Text End ---")
+                            return None
+                    else:
+                        print(f"[ERROR][API] Hypixel API request failed: Status {response.status}")
+                        print(f"--- Response Text Start ---\n{response_text}\n--- Response Text End ---")
+                        return None
+        except aiohttp.ClientError as e:
+            print(f"[ERROR][API] Network error during Hypixel API request: {e}")
+            return None
+        except Exception as e:
+            print(f"[ERROR][API] Unexpected error during Hypixel API request: {e}")
+            traceback.print_exc()
+            return None
+
+    async def _get_player_profile_data(self, ctx: commands.Context, ign: str | None) -> tuple[str, str, dict] | None:
+        """
+        Handles the common boilerplate for commands needing player profile data.
+        Checks API key, session, gets UUID, fetches profiles, finds latest profile.
+        Sends error messages to chat if steps fail.
+        Returns (target_ign, player_uuid, latest_profile_data) or None if an error occurred.
+        """
+        if not self.hypixel_api_key:
+            await ctx.send("Hypixel API is not configured. Please check the .env file.")
+            return None
+
+        target_ign = ign if ign else ctx.author.name
+        target_ign = target_ign.lstrip('@')
+        await ctx.send(f"Searching data for '{target_ign}'...") # Generic initial message
+
+        player_uuid = await self._get_uuid_from_ign(target_ign)
+        if not player_uuid:
+            await ctx.send(f"Could not find Minecraft account for '{target_ign}'. Please check the username.")
+            return None
+
+        profiles = await self._get_skyblock_data(player_uuid)
+        if profiles is None: # API error occurred
+            await ctx.send(f"Could not fetch SkyBlock profiles for '{target_ign}'. An API error occurred.")
+            return None
+        if not profiles: # API succeeded but returned no profiles
+            await ctx.send(f"'{target_ign}' seems to have no SkyBlock profiles yet.")
+            return None
+
+        latest_profile = self._find_latest_profile(profiles, player_uuid)
+        if not latest_profile:
+            await ctx.send(f"Could not find an active profile for '{target_ign}'. Player must be a member of at least one profile.")
+            return None
+
+        return target_ign, player_uuid, latest_profile
+
+
+    # --- Calculation Methods ---
+
     def calculate_skill_level(self, xp: float, skill_name: str, member_data: dict | None = None) -> float:
-        """Berechnet das Level eines Skills basierend auf der XP und den Leveling-Daten."""
+        """Calculates the level of a skill based on XP, considering level caps and special skills."""
         if not self.leveling_data['xp_table']:
             return 0.0
-            
-        max_level = self.leveling_data['level_caps'].get(skill_name, 50)
-        xp_table = self.leveling_data['xp_table']
-        
-        # Berechne die Gesamt-XP für das maximale Level
-        total_xp = sum(xp_table)
-        
-        # Wenn die XP höher als die maximale XP in der Tabelle ist, return max_level
-        if xp >= total_xp:
-            # Spezielle Behandlung für Taming basierend auf Pet-Sacrifices
-            if skill_name == 'taming' and member_data:
-                pets_data = member_data.get('pets_data', {})
-                pet_care = pets_data.get('pet_care', {})
-                sacrificed_pets = pet_care.get('pet_types_sacrificed', [])
-                
-                # Berechne das maximale Level basierend auf den Pet-Sacrifices (0-10)
-                # Jedes Level zwischen 50 und 60 ist möglich
-                if len(sacrificed_pets) >= 10:
-                    max_level = 60
-                elif len(sacrificed_pets) >= 1:
-                    # Für 1-9 Pets: Level 50 + Anzahl der Pets
-                    max_level = 50 + len(sacrificed_pets)
-                else:
-                    max_level = 50
-            # Spezielle Behandlung für Farming basierend auf Jacobs Contest Perks
-            elif skill_name == 'farming' and member_data:
-                jacobs_contest = member_data.get('jacobs_contest', {})
-                perks = jacobs_contest.get('perks', {})
-                farming_level_cap = perks.get('farming_level_cap', 0)  # Standard ist 0, da es ein Bonus ist
-                max_level = 50 + farming_level_cap  # Basis-Level 50 + Bonus
-                    
-            return max_level
-            
-        # Finde das Level basierend auf der XP
+
+        # Determine base max level (usually 50 or 60)
+        base_max_level = self.leveling_data['level_caps'].get(skill_name, 50)
+        xp_table_to_use = self.leveling_data['xp_table'] # Use standard XP table
+
+        # Calculate effective max level considering special rules
+        effective_max_level = base_max_level
+        if skill_name == 'taming' and member_data:
+            pets_data = member_data.get('pets_data', {}).get('pet_care', {})
+            sacrificed_count = len(pets_data.get('pet_types_sacrificed', []))
+            effective_max_level = 50 + min(sacrificed_count, 10) # Cap bonus at +10
+        elif skill_name == 'farming' and member_data:
+            jacobs_perks = member_data.get('jacobs_contest', {}).get('perks', {})
+            farming_level_cap_bonus = jacobs_perks.get('farming_level_cap', 0)
+            effective_max_level = 50 + farming_level_cap_bonus
+
+        # Calculate total XP required for the effective max level
+        total_xp_for_max = sum(xp_table_to_use[:effective_max_level]) # Sum only up to the effective cap
+
+        # If XP meets or exceeds the requirement for the max level, return max level
+        if xp >= total_xp_for_max:
+            return float(effective_max_level)
+
+        # Find level based on XP progression
         total_xp_required = 0
         level = 0
-        
-        for required_xp in xp_table:
+        # Iterate only up to the XP required for levels below the effective max
+        for i, required_xp in enumerate(xp_table_to_use):
+            if i >= effective_max_level: # Stop if we exceed the effective max level index
+                 break
             total_xp_required += required_xp
             if xp >= total_xp_required:
                 level += 1
             else:
-                break
-                
-        # Spezielle Behandlung für Taming basierend auf Pet-Sacrifices
-        if skill_name == 'taming' and member_data:
-            pets_data = member_data.get('pets_data', {})
-            pet_care = pets_data.get('pet_care', {})
-            sacrificed_pets = pet_care.get('pet_types_sacrificed', [])
-            
-            # Berechne das maximale Level basierend auf den Pet-Sacrifices (0-10)
-            if len(sacrificed_pets) >= 10:
-                max_level = 60
-            elif len(sacrificed_pets) >= 1:
-                # Für 1-9 Pets: Level 50 + Anzahl der Pets
-                max_level = 50 + len(sacrificed_pets)
-            else:
-                max_level = 50
-        # Spezielle Behandlung für Farming basierend auf Jacobs Contest Perks
-        elif skill_name == 'farming' and member_data:
-            jacobs_contest = member_data.get('jacobs_contest', {})
-            perks = jacobs_contest.get('perks', {})
-            farming_level_cap = perks.get('farming_level_cap', 0)  # Standard ist 0, da es ein Bonus ist
-            max_level = 50 + farming_level_cap  # Basis-Level 50 + Bonus
-                
-            # Verwende das niedrigere Level zwischen XP-basiertem Level und Farming Level Cap
-            level = min(level, max_level)
-                
-        return level
+                # Calculate progress towards the next level
+                current_level_xp = total_xp_required - required_xp
+                next_level_xp_needed = required_xp
+                if next_level_xp_needed > 0:
+                    progress = (xp - current_level_xp) / next_level_xp_needed
+                    # Ensure progress doesn't make level exceed effective max
+                    calculated_level = level + progress
+                    return min(calculated_level, float(effective_max_level))
+                else: # Avoid division by zero if xp table is malformed
+                    return min(float(level), float(effective_max_level))
+
+        # If loop finishes, player is exactly max level or below
+        return min(float(level), float(effective_max_level))
+
 
     def calculate_average_skill_level(self, profile: dict, player_uuid: str) -> float | None:
-        profile_id = profile.get('profile_id', 'UNKNOWN_PROFILE_ID')
-        print(f"[Log][Calc] Berechne Skill Average für Profil {profile_id}")
-        
-        if not profile or player_uuid not in profile.get('members', {}):
-            print(f"[Log][Calc] Profil ungültig oder Spieler nicht Mitglied im Profil.")
+        """Calculates the average skill level, excluding cosmetics like Carpentry and Runecrafting if desired."""
+        print(f"[DEBUG][Calc] Calculating Skill Average for profile {profile.get('profile_id', 'UNKNOWN')}")
+        member_data = profile.get('members', {}).get(player_uuid)
+        if not member_data:
+            print(f"[WARN][Calc] Member data not found for {player_uuid} in profile.")
             return None
-            
-        member_data = profile['members'][player_uuid]
-        player_data = member_data.get('player_data', {})
-        experience_data = player_data.get('experience', {})
-        
+
+        experience_data = member_data.get('player_data', {}).get('experience', {})
         total_level_estimate = 0
         skills_counted = 0
-        
-        print("\n[Log][Calc] Skill-Level Übersicht:")
+
+        print("\n[DEBUG][Calc] Skill Levels:")
         print("-" * 40)
-        
-        for skill_name in AVERAGE_SKILLS_LIST:
+
+        for skill_name in AVERAGE_SKILLS_LIST: # Use the predefined list
             xp_field = f'SKILL_{skill_name.upper()}'
             skill_xp = experience_data.get(xp_field)
-            
+
             if skill_xp is not None:
-                if skill_xp > 0:
-                    level = self.calculate_skill_level(skill_xp, skill_name, member_data)
-                    total_level_estimate += level
-                    skills_counted += 1
-                    print(f"{skill_name.capitalize():<10} Level: {level:>3.1f} | XP: {skill_xp:,.0f}")
-                else:
-                    total_level_estimate += 0
-                    skills_counted += 1
-                    print(f"{skill_name.capitalize():<10} Level: {0:>3.1f} | XP: 0")
+                level = self.calculate_skill_level(skill_xp, skill_name, member_data)
+                total_level_estimate += level
+                skills_counted += 1
+                print(f"{skill_name.capitalize():<11}: {level:>5.2f} (XP: {skill_xp:,.0f})")
             else:
+                # Still count skill as 0 if API doesn't provide XP (e.g., new skill)
                 total_level_estimate += 0
                 skills_counted += 1
-                print(f"{skill_name.capitalize():<10} Level: {0:>3.1f} | XP: Nicht verfügbar")
-        
+                print(f"{skill_name.capitalize():<11}: {0.00:>5.2f} (XP: Not Available)")
+
         print("-" * 40)
-                
+
         if skills_counted > 0:
             average = total_level_estimate / skills_counted
-            print(f"[Log][Calc] Skill Average berechnet: {average:.2f}")
+            print(f"[DEBUG][Calc] Skill Average calculated: {average:.4f}")
             return average
         else:
-            print(f"[Log][Calc] Keine Skills gefunden.")
+            print("[WARN][Calc] No skills counted for average calculation.")
             return 0.0
 
-    def find_latest_profile(self, profiles: list, player_uuid: str) -> dict | None:
-         print(f"[Log][Profile] Suche Profil für UUID {player_uuid} aus {len(profiles)} Profilen.")
-         
-         if not profiles:
-             print("[Log][Profile] Keine Profile zum Durchsuchen vorhanden.")
-             return None
-             
-         # Zuerst nach ausgewähltem Profil suchen
-         for profile in profiles:
-             profile_id = profile.get('profile_id', 'UNKNOWN_ID')
-             cute_name = profile.get('cute_name', 'UNKNOWN_NAME')
-             is_selected = profile.get('selected', False)
-             member_data = profile.get('members', {}).get(player_uuid)
-             
-             if member_data and is_selected:
-                 print(f"[Log][Profile] Ausgewähltes Profil gefunden: '{cute_name}'")
-                 return profile
-             elif member_data:
-                 print(f"[Log][Profile] Profil '{cute_name}' ist nicht ausgewählt.")
-             else:
-                 print(f"[Log][Profile] Profil '{cute_name}': Spieler ist kein Mitglied.")
-         
-         # Wenn kein ausgewähltes Profil gefunden wurde, suche nach dem neuesten Profil
-         print("[Log][Profile] Kein ausgewähltes Profil gefunden, suche nach dem neuesten Profil...")
-         latest_profile = None
-         latest_timestamp = 0
-         
-         for profile in profiles:
-             cute_name = profile.get('cute_name', 'UNKNOWN_NAME')
-             member_data = profile.get('members', {}).get(player_uuid)
-             
-             if member_data:
-                 first_join = member_data.get('profile', {}).get('first_join', 0)
-                 if first_join > latest_timestamp:
-                     latest_timestamp = first_join
-                     latest_profile = profile
-                     print(f"[Log][Profile] Neueres Profil gefunden: '{cute_name}'")
-         
-         if latest_profile:
-             print(f"[Log][Profile] Neuestes Profil ausgewählt: '{latest_profile.get('cute_name')}'")
-             return latest_profile
-         
-         print(f"[Log][Profile] Kein passendes Profil gefunden.")
-         return None
+    def calculate_dungeon_level(self, xp: float) -> float:
+        """Calculates the Catacombs level based on XP, including progress as decimal points."""
+        if not self.leveling_data['catacombs_xp']:
+            print("[WARN][Calc] Catacombs XP table not loaded.")
+            return 0.0
 
-    async def get_uuid_from_ign(self, username: str) -> str | None:
-        if not self.http_session or self.http_session.closed:
-            print("[Log][API] Fehler: aiohttp Session nicht verfügbar für Mojang API Anfrage.")
-            return None
-        url = MOJANG_API_URL.format(username=username)
-        print(f"[Log][API] Mojang Anfrage für '{username}'...")
-        try:
-            async with self.http_session.get(url) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    uuid = data.get('id')
-                    if not uuid:
-                        print(f"[Log][API] Mojang API: Keine UUID für '{username}' gefunden.")
-                    return uuid
-                elif response.status == 204:
-                    print(f"[Log][API] Mojang API: Benutzer '{username}' nicht gefunden.")
-                    return None
+        max_level = 100  # Catacombs max level
+        xp_table = self.leveling_data['catacombs_xp']
+
+        # Calculate total XP for max level (sum all entries)
+        total_xp_for_max = sum(xp_table)
+
+        if xp >= total_xp_for_max:
+            return float(max_level)
+
+        total_xp_required = 0
+        level = 0
+        for i, required_xp in enumerate(xp_table):
+            if i >= max_level: # Should not happen if xp_table has 100 entries, but safety check
+                break
+            current_level_xp_threshold = total_xp_required
+            total_xp_required += required_xp
+
+            if xp >= total_xp_required:
+                level += 1
+            else:
+                # Calculate progress within the current level
+                xp_in_level = xp - current_level_xp_threshold
+                xp_needed_for_level = required_xp
+                if xp_needed_for_level > 0:
+                    progress = xp_in_level / xp_needed_for_level
+                    return level + progress
+                else: # Avoid division by zero
+                    return float(level)
+
+        # If loop completes, player is exactly level 100 (or table is shorter than 100)
+        return float(level)
+
+    def calculate_class_level(self, xp: float) -> float:
+        """Calculates the class level based on XP using the Catacombs XP table up to level 50."""
+        if not self.leveling_data['catacombs_xp']:
+            print("[WARN][Calc] Catacombs XP table not loaded for class calculation.")
+            return 0.0
+
+        max_class_level = 50
+        # Use only the first 50 entries from the Catacombs XP table for class levels
+        xp_table = self.leveling_data['catacombs_xp'][:max_class_level]
+
+        total_xp_for_max_class_level = sum(xp_table)
+
+        if xp >= total_xp_for_max_class_level:
+            return float(max_class_level)
+
+        total_xp_required = 0
+        level = 0
+        for i, required_xp in enumerate(xp_table):
+            # No need to check i >= max_class_level due to slicing xp_table
+            current_level_xp_threshold = total_xp_required
+            total_xp_required += required_xp
+
+            if xp >= total_xp_required:
+                level += 1
+            else:
+                xp_in_level = xp - current_level_xp_threshold
+                xp_needed_for_level = required_xp
+                if xp_needed_for_level > 0:
+                    progress = xp_in_level / xp_needed_for_level
+                    return level + progress
                 else:
-                    print(f"[Log][API] Mojang API Fehler: Status {response.status}")
-                    return None
-        except aiohttp.ClientError as e:
-            print(f"[Log][API] Netzwerkfehler bei Mojang API Anfrage: {e}")
-            return None
-        except Exception as e:
-            print(f"[Log][API] Unerwarteter Fehler bei Mojang API Anfrage: {e}")
-            traceback.print_exc()
-            return None
+                    return float(level)
 
-    async def get_skyblock_data(self, uuid: str) -> list | None:
-        if not self.hypixel_api_key:
-            print("[Log][API] Fehler: Hypixel API Key nicht konfiguriert.")
-            return None
-        if not self.http_session or self.http_session.closed:
-            print("[Log][API] Fehler: aiohttp Session nicht verfügbar für Hypixel API Anfrage.")
-            return None
-        params = {"key": self.hypixel_api_key, "uuid": uuid}
-        print(f"[Log][API] Hypixel Anfrage für UUID '{uuid}'...")
-        try:
-            async with self.http_session.get(HYPIXEL_API_URL, params=params) as response:
-                print(f"[Log][API] Hypixel Antwort Status: {response.status}")
-                response_text = await response.text()
-                if response.status == 200:
-                    try:
-                        data = json.loads(response_text)
-                        # Speichere die komplette Antwort in einer JSON-Datei
-                        debug_file = f"hypixel_response_{uuid}.json"
-                        with open(debug_file, 'w', encoding='utf-8') as f:
-                            json.dump(data, f, indent=4)
-                        print(f"[Log][API] Hypixel Antwort wurde in '{debug_file}' gespeichert.")
-                        
-                        if data.get("success"):
-                            profiles = data.get('profiles')
-                            if profiles is None:
-                                 print(f"[Log][API] Hypixel API Erfolg, aber 'profiles' Feld fehlt oder ist null.")
-                                 return None
-                            if not isinstance(profiles, list):
-                                print(f"[Log][API] Hypixel API Erfolg, aber 'profiles' ist keine Liste.")
-                                return None
-                            return profiles
-                        else:
-                            reason = data.get('cause', 'Unbekannter Grund')
-                            print(f"[Log][API] Hypixel API Fehler: {reason}")
-                            return None
-                    except json.JSONDecodeError as json_e:
-                        print(f"[Log][API][Error] Fehler beim Parsen der Hypixel JSON Antwort: {json_e}")
-                        return None
-                else:
-                    print(f"[Log][API] Fehler bei Hypixel API Anfrage: Status {response.status}")
-                    return None
-        except aiohttp.ClientError as e:
-            print(f"[Log][API][Error] Netzwerkfehler bei Hypixel API Anfrage: {e}")
-            return None
-        except Exception as e:
-            print(f"[Log][API][Error] Unerwarteter Fehler bei Hypixel API Anfrage: {e}")
-            traceback.print_exc()
-            return None
+        # If loop completes, player is exactly level 50
+        return float(level)
 
-    async def get_auctions_data(self, uuid: str) -> list | None:
-        """Fetches auction data for a player."""
-        if not self.hypixel_api_key:
-            print("[Log][API] Error: Hypixel API Key not configured.")
-            return None
-        if not self.http_session or self.http_session.closed:
-            print("[Log][API] Error: aiohttp session not available for Hypixel API request.")
-            return None
-            
-        url = "https://api.hypixel.net/v2/skyblock/auction"
-        params = {
-            "key": self.hypixel_api_key,
-            "player": uuid
-        }
-        print(f"[Log][API] Hypixel Auctions request for UUID '{uuid}'...")
-        
-        try:
-            async with self.http_session.get(url, params=params) as response:
-                print(f"[Log][API] Hypixel response status: {response.status}")
-                if response.status == 200:
-                    try:
-                        data = await response.json()
-                        if data.get("success"):
-                            return data.get('auctions', [])
-                        else:
-                            reason = data.get('cause', 'Unknown reason')
-                            print(f"[Log][API] Hypixel API Error: {reason}")
-                            return None
-                    except json.JSONDecodeError as json_e:
-                        print(f"[Log][API][Error] Error parsing Hypixel JSON response: {json_e}")
-                        return None
-                else:
-                    print(f"[Log][API] Error in Hypixel API request: Status {response.status}")
-                    return None
-        except aiohttp.ClientError as e:
-            print(f"[Log][API][Error] Network error in Hypixel API request: {e}")
-            return None
-        except Exception as e:
-            print(f"[Log][API][Error] Unexpected error in Hypixel API request: {e}")
-            traceback.print_exc()
-            return None
-
-    def format_price(self, price: int) -> str:
-        """Formatiert einen Preis in eine kürzere Form (z.B. 1.3m statt 1,300,000)."""
+    def format_price(self, price: int | float) -> str:
+        """Formats a price into a shorter form (e.g., 1.3m instead of 1,300,000)."""
+        price = float(price) # Ensure float for division
         if price >= 1_000_000_000:
-            return f"{price/1_000_000_000:.1f}b"
+            return f"{price / 1_000_000_000:.1f}b"
         elif price >= 1_000_000:
-            return f"{price/1_000_000:.1f}m"
+            return f"{price / 1_000_000:.1f}m"
         elif price >= 1_000:
-            return f"{price/1_000:.1f}k"
+            return f"{price / 1_000:.1f}k"
         else:
-            return str(price)
+            return f"{price:.0f}" # Display small numbers as integers
 
-    # --- ENDE PASTE PREVIOUS METHODS ---
+    async def _send_message(self, ctx: commands.Context, message: str):
+        """Helper function to send messages, incorporating workarounds for potential issues."""
+        print(f"[DEBUG][Send] Attempting to send to #{ctx.channel.name}: {message[:100]}...") # Log first 100 chars
+        try:
+            # --- WORKAROUND: Small delay before sending ---
+            # May help with potential silent rate limits or timing issues after await calls.
+            await asyncio.sleep(0.3)
+            # ---------------------------------------------
+
+            # --- WORKAROUND: Re-fetch channel object ---
+            # May help if the context's channel object state becomes inconsistent after awaits.
+            channel_name = ctx.channel.name
+            channel = self.get_channel(channel_name)
+            if channel:
+                print(f"[DEBUG][Send] Re-fetched channel object for {channel_name}. Sending via channel object.")
+                await channel.send(message)
+                print(f"[DEBUG][Send] Successfully sent message via channel object to #{channel_name}.")
+            else:
+                # Fallback if channel couldn't be re-fetched (should not happen if connected)
+                print(f"[WARN][Send] Could not re-fetch channel object for {channel_name}. Falling back to ctx.send().")
+                await ctx.send(message)
+                print(f"[DEBUG][Send] Successfully sent message via ctx.send() to #{channel_name}.")
+            # -----------------------------------------
+
+        except Exception as send_e:
+            print(f"[ERROR][Send] FAILED to send message to #{ctx.channel.name}: {send_e}")
+            traceback.print_exc()
 
     # --- Bot Events ---
+
     async def event_ready(self):
-        """Wird aufgerufen, sobald der Bot erfolgreich mit Twitch verbunden ist."""
+        """Called once the bot has successfully connected to Twitch."""
         try:
-            print("[Log][EventReady] Entering event_ready...")
-            await self.start_http_session()
-            print("[Log][EventReady] aiohttp session started.")
+            print("[INFO] Bot starting up...")
 
-            print("[Log][EventReady] Printing login info...")
             print(f'------')
-            print(f'Login erfolgreich als: {self.nick}')
-            # Log the list of channels the bot has actually connected to
+            print(f'Logged in as: {self.nick} ({self.user_id})')
             connected_channel_names = [ch.name for ch in self.connected_channels]
-            print(f'Verbunden mit Kanälen: {connected_channel_names}') 
-            print(f'User ID: {self.user_id}')
+            print(f'Connected to channels: {connected_channel_names}')
             print(f'------')
-            print("[Log][EventReady] Login info printed.")
 
-            # Check if the bot connected to any channels
             if self.connected_channels:
-                print(f"[Log][EventReady] Bot erfolgreich mit {len(self.connected_channels)} Kanal/Kanälen verbunden.")
-                print("Bot ist bereit!")
+                print(f"[INFO] Bot successfully connected to {len(self.connected_channels)} channel(s).")
+                print("Bot is ready!")
             else:
-                print("[Log][EventReady][Warnung] Bot konnte sich mit keinen Kanälen verbinden.")
+                print("[WARN] Bot connected to Twitch but did not join any channels.")
 
         except Exception as e:
-            print(f"[Log][Error][EventReady] Fehler in event_ready: {e}")
+            print(f"[ERROR] Error during event_ready: {e}")
             traceback.print_exc()
 
     async def event_message(self, message):
-        """Verarbeitet eingehende Twitch-Nachrichten."""
+        """Processes incoming Twitch chat messages."""
         if message.echo:
-            return  # Ignoriere Echo-Nachrichten (Nachrichten vom Bot selbst)
+            return  # Ignore messages sent by the bot itself
 
-        # Get the names of channels the bot is currently connected to
+        # Ensure the message has a valid channel and author
+        if not hasattr(message.channel, 'name') or not hasattr(message.author, 'name') or not message.author.name:
+            return # Ignore system messages or messages without proper author/channel context
+
+        # Check if the message came from a channel the bot is actually connected to
+        # This is needed because twitchio might receive messages from channels it tried to join but failed
         connected_channel_names = [ch.name for ch in self.connected_channels]
+        if message.channel.name not in connected_channel_names:
+            # print(f"[DEBUG] Ignored message from non-connected channel: #{message.channel.name}")
+            return
 
-        # Check if the message came from a real Twitch channel and if it's one the bot is connected to
-        if not hasattr(message.channel, 'name') or message.channel.name not in connected_channel_names:
-            # Optional: Log that a message from an unexpected channel was received
-            # print(f"[Log][Debug] Ignored message from unexpected channel: {message.channel.name}")
-            return # Ignore messages from channels the bot isn't connected to or invalid channel objects
+        # Print received message for debugging
+        # print(f"[MSG] #{message.channel.name} - {message.author.name}: {message.content}")
 
-        # Prüfe, ob die Nachricht von einem echten Twitch-User kommt
-        if not hasattr(message.author, 'name') or not message.author.name:
-            return  # Ignoriere Nachrichten ohne echten Autor
-
-        # Verarbeite Befehle
+        # Process commands defined in this class
         await self.handle_commands(message)
 
+        # Handle custom commands (if implementation exists)
+        # await self.handle_custom_commands(message)
+
     # --- Commands ---
+
     @commands.command(name='ping')
     async def ping_command(self, ctx: commands.Context):
-        """Antwortet auf den Befehl #ping mit pong."""
-        print(f"[Log][Cmd] Befehl '{self._prefix}ping' von {ctx.author.name} in #{ctx.channel.name} empfangen.")
-        await ctx.send(f'pong, {ctx.author.name}!')
+        """Responds with pong."""
+        print(f"[COMMAND] Ping command received from {ctx.author.name} in #{ctx.channel.name}")
+        await self._send_message(ctx, f'pong, {ctx.author.name}!')
 
     @commands.command(name='skills')
     async def skills_command(self, ctx: commands.Context, *, ign: str | None = None):
         """Shows the average SkyBlock skill level for a player."""
-        if not self.hypixel_api_key:
-            await ctx.send("Hypixel API is not configured. Please check the .env file.")
-            return
+        profile_data = await self._get_player_profile_data(ctx, ign)
+        if not profile_data:
+            return # Error message already sent by helper
 
-        if not self.http_session or self.http_session.closed:
-            await ctx.send("Error connecting to external APIs. Please try again later.")
-            return
+        target_ign, player_uuid, latest_profile = profile_data
+        profile_name = latest_profile.get('cute_name', 'Unknown')
 
-        target_ign = ign if ign else ctx.author.name
-        target_ign = target_ign.lstrip('@')
-        await ctx.send(f"Searching SkyBlock Skill Average for '{target_ign}'...")
-        
         try:
-            player_uuid = await self.get_uuid_from_ign(target_ign)
-            if not player_uuid:
-                await ctx.send(f"Could not find Minecraft account for '{target_ign}'. Please check the username.")
-                return
-
-            profiles = await self.get_skyblock_data(player_uuid)
-            if profiles is None:
-                await ctx.send(f"Could not fetch SkyBlock profiles for '{target_ign}'. Player might be offline or has no profiles.")
-                return
-            if not profiles:
-                await ctx.send(f"'{target_ign}' seems to have no SkyBlock profiles yet.")
-                return
-
-            latest_profile = self.find_latest_profile(profiles, player_uuid)
-            if not latest_profile:
-                await ctx.send(f"Could not find an active profile for '{target_ign}'. Player must be a member of at least one profile.")
-                return
-
-            profile_name = latest_profile.get('cute_name', 'Unknown')
             average_level = self.calculate_average_skill_level(latest_profile, player_uuid)
             if average_level is not None:
-                await ctx.send(f"{target_ign}'s Skill Average in profile '{profile_name}' is approximately {average_level:.2f}.")
+                await self._send_message(ctx, f"{target_ign}'s Skill Average in profile '{profile_name}' is approximately {average_level:.2f}.")
             else:
-                await ctx.send(f"Could not calculate skill level for '{target_ign}' in profile '{profile_name}'. Skill data might be missing.")
-
+                await self._send_message(ctx, f"Could not calculate skill level for '{target_ign}' in profile '{profile_name}'. Skill data might be missing.")
         except Exception as e:
-            await ctx.send(f"An unexpected error occurred. Please try again later.")
+            print(f"[ERROR][SkillsCmd] Unexpected error calculating skills: {e}")
+            traceback.print_exc()
+            await self._send_message(ctx, "An unexpected error occurred while calculating skill levels.")
 
     @commands.command(name='kuudra')
     async def kuudra_command(self, ctx: commands.Context, *, ign: str | None = None):
-        """Shows Kuudra completions for different tiers."""
-        if not self.hypixel_api_key:
-            await ctx.send("Hypixel API is not configured. Please check the .env file.")
-            return
+        """Shows Kuudra completions for different tiers and calculates a score."""
+        profile_data = await self._get_player_profile_data(ctx, ign)
+        if not profile_data:
+            return # Error message already sent by helper
 
-        if not self.http_session or self.http_session.closed:
-            await ctx.send("Error connecting to external APIs. Please try again later.")
-            return
+        target_ign, player_uuid, latest_profile = profile_data
+        profile_name = latest_profile.get('cute_name', 'Unknown')
 
-        target_ign = ign if ign else ctx.author.name
-        target_ign = target_ign.lstrip('@')
-        await ctx.send(f"Searching Kuudra completions for '{target_ign}'...")
-        
         try:
-            player_uuid = await self.get_uuid_from_ign(target_ign)
-            if not player_uuid:
-                await ctx.send(f"Could not find Minecraft account for '{target_ign}'. Please check the username.")
-                return
-
-            profiles = await self.get_skyblock_data(player_uuid)
-            if profiles is None:
-                await ctx.send(f"Could not fetch SkyBlock profiles for '{target_ign}'. Player might be offline or has no profiles.")
-                return
-            if not profiles:
-                await ctx.send(f"'{target_ign}' seems to have no SkyBlock profiles yet.")
-                return
-
-            latest_profile = self.find_latest_profile(profiles, player_uuid)
-            if not latest_profile:
-                await ctx.send(f"Could not find an active profile for '{target_ign}'. Player must be a member of at least one profile.")
-                return
-
-            profile_name = latest_profile.get('cute_name', 'Unknown')
             member_data = latest_profile.get('members', {}).get(player_uuid, {})
-            nether_island_data = member_data.get('nether_island_player_data', {})
-            kuudra_completed_tiers = nether_island_data.get('kuudra_completed_tiers', {})
-            
-            if not kuudra_completed_tiers:
-                await ctx.send(f"'{target_ign}' has no Kuudra completions in profile '{profile_name}'.")
+            nether_island_data = member_data.get('nether_island_player_data', None) # Check for None first
+
+            if nether_island_data is None:
+                 # Don't send a message here, rely on the underlying send issue being the problem
+                 # await self._send_message(ctx, f"'{target_ign}' has no Kuudra data available (missing nether island data) in profile '{profile_name}'.")
+                 print(f"[INFO][KuudraCmd] No nether_island_player_data found for {target_ign} in profile {profile_name}.")
+                 return
+
+            kuudra_completed_tiers = nether_island_data.get('kuudra_completed_tiers', None) # Check for None
+
+            if kuudra_completed_tiers is None or not kuudra_completed_tiers: # Check for None or empty dict
+                # Don't send a message here
+                # await self._send_message(ctx, f"'{target_ign}' has no Kuudra completions recorded in profile '{profile_name}'.")
+                print(f"[INFO][KuudraCmd] No Kuudra completions recorded for {target_ign} in profile {profile_name}.")
                 return
-                
-            # Format output - only the 5 main entries
-            main_tiers = ['none', 'hot', 'burning', 'fiery', 'infernal']
+
+            # Format output
             completions = []
             total_score = 0
-            
-            # Point system for different tiers
-            tier_points = {
-                'none': 1,
-                'hot': 2,
-                'burning': 3,
-                'fiery': 4,
-                'infernal': 5
-            }
-            
-            for tier in main_tiers:
+            for tier in KUUDRA_TIERS_ORDER:
                 count = kuudra_completed_tiers.get(tier, 0)
-                # Rename 'none' to 'basic'
-                tier_name = 'basic' if tier == 'none' else tier
+                tier_name = 'basic' if tier == 'none' else tier # Rename 'none' to 'basic'
                 completions.append(f"{tier_name} {count}")
-                # Calculate score for this tier
-                total_score += count * tier_points[tier]
-                
-            await ctx.send(f"{target_ign}'s Kuudra completions in profile '{profile_name}': {', '.join(completions)} | Score: {total_score:,}")
+                total_score += count * KUUDRA_TIER_POINTS.get(tier, 0) # Use .get for safety
+
+            await self._send_message(ctx, f"{target_ign}'s Kuudra completions in profile '{profile_name}': {', '.join(completions)} | Score: {total_score:,}")
 
         except Exception as e:
-            await ctx.send(f"An unexpected error occurred. Please try again later.")
+            print(f"[ERROR][KuudraCmd] Unexpected error processing Kuudra data: {e}")
+            traceback.print_exc()
+            await self._send_message(ctx, "An unexpected error occurred while fetching Kuudra completions.")
 
-    @commands.command(name='auctions')
+    @commands.command(name='auctions', aliases=['ah'])
     async def auctions_command(self, ctx: commands.Context, *, ign: str | None = None):
-        """Shows active auctions for a player."""
-        if not self.hypixel_api_key:
-            await ctx.send("Hypixel API is not configured. Please check the .env file.")
-            return
-
-        if not self.http_session or self.http_session.closed:
-            await ctx.send("Error connecting to external APIs. Please try again later.")
+        """Shows active auctions for a player, limited by character count."""
+        if not self.hypixel_api_key: # API key check needed here as it uses a different endpoint helper
+            await ctx.send("Hypixel API is not configured.")
             return
 
         target_ign = ign if ign else ctx.author.name
         target_ign = target_ign.lstrip('@')
         await ctx.send(f"Searching active auctions for '{target_ign}'...")
-        
+
         try:
-            player_uuid = await self.get_uuid_from_ign(target_ign)
+            player_uuid = await self._get_uuid_from_ign(target_ign)
             if not player_uuid:
-                await ctx.send(f"Could not find Minecraft account for '{target_ign}'. Please check the username.")
+                await ctx.send(f"Could not find Minecraft account for '{target_ign}'.")
                 return
 
-            auctions = await self.get_auctions_data(player_uuid)
-            if auctions is None:
-                await ctx.send(f"Could not fetch auction data for '{target_ign}'. Please try again later.")
+            # --- Fetch Auction Data ---
+            url = HYPIXEL_AUCTION_URL
+            params = {"key": self.hypixel_api_key, "player": player_uuid}
+            print(f"[DEBUG][API] Hypixel Auctions request for UUID '{player_uuid}'...")
+            auctions = []
+            try:
+                 async with aiohttp.ClientSession() as session:
+                    async with session.get(url, params=params) as response:
+                        print(f"[DEBUG][API] Hypixel Auctions response status: {response.status}")
+                        if response.status == 200:
+                            data = await response.json()
+                            if data.get("success"):
+                                auctions = data.get('auctions', [])
+                            else:
+                                reason = data.get('cause', 'Unknown reason')
+                                print(f"[ERROR][API] Hypixel Auctions API Error: {reason}")
+                                await ctx.send("Failed to fetch auction data (API error).")
+                                return
+                        else:
+                            print(f"[ERROR][API] Hypixel Auctions API request failed: Status {response.status}")
+                            await ctx.send("Failed to fetch auction data (HTTP error).")
+                            return
+            except aiohttp.ClientError as e:
+                print(f"[ERROR][API] Network error during Hypixel Auctions API request: {e}")
+                await ctx.send("Failed to fetch auction data (Network error).")
                 return
-                
+            except Exception as e:
+                print(f"[ERROR][API] Unexpected error during Hypixel Auctions API request: {e}")
+                traceback.print_exc()
+                await ctx.send("An unexpected error occurred while fetching auctions.")
+                return
+            # --- End Fetch Auction Data ---
+
             if not auctions:
-                await ctx.send(f"'{target_ign}' has no active auctions.")
+                await self._send_message(ctx, f"'{target_ign}' has no active auctions.")
                 return
-                
-            # Count unique items
-            unique_items = set()
+
+            # Count unique items before filtering
+            total_unique_items = len({auction.get('item_name', 'Unknown Item') for auction in auctions})
+
+            # Format output respecting character limit
+            message_prefix = f"{target_ign}'s Auctions: "
+            auction_list_parts = []
+            shown_items_count = 0
+
+            current_message = message_prefix
             for auction in auctions:
-                item_name = auction.get('item_name', 'Unknown Item')
-                unique_items.add(item_name)
-            
-            # Format output with 480 character limit
-            message = f"{target_ign}'s Auctions: "
-            auction_list = []
-            shown_items = set()
-            
-            for auction in auctions:
-                item_name = auction.get('item_name', 'Unknown Item')
+                item_name = auction.get('item_name', 'Unknown Item').replace("§.", "") # Basic formatting code removal
                 highest_bid = auction.get('highest_bid_amount', 0)
                 if highest_bid == 0:
                     highest_bid = auction.get('starting_bid', 0)
-                
-                # Format price
+
                 price_str = self.format_price(highest_bid)
-                
-                # Create auction string
                 auction_str = f"{item_name} {price_str}"
-                
-                # Check if new string fits in message
-                if len(auction_list) > 0:
-                    test_message = message + ' | '.join(auction_list + [auction_str])
+
+                # Check if adding the next item exceeds the limit
+                separator = " | " if auction_list_parts else ""
+                if len(current_message) + len(separator) + len(auction_str) <= MAX_MESSAGE_LENGTH:
+                    auction_list_parts.append(auction_str)
+                    current_message += separator + auction_str
+                    shown_items_count += 1
                 else:
-                    test_message = message + auction_str
-                
-                if len(test_message) <= 480:
-                    auction_list.append(auction_str)
-                    shown_items.add(item_name)
-            
-            # Add auctions to message
-            if auction_list:
-                message += ' | '.join(auction_list)
-                hidden_items = len(unique_items) - len(shown_items)
-                if hidden_items > 0:
-                    message += f" (+{hidden_items} Auctions)"
-                
-                await ctx.send(message)
+                    # Stop adding more items if limit is reached
+                    break
+
+            if not auction_list_parts:
+                 await self._send_message(ctx, f"Could not format any auctions for '{target_ign}' within the character limit.")
+                 return
+
+            # Add suffix if some items were hidden
+            final_message = message_prefix + " | ".join(auction_list_parts)
+            hidden_items = total_unique_items - shown_items_count
+            if hidden_items > 0:
+                suffix = f" (+{hidden_items} more)"
+                # Check if suffix fits, otherwise omit it
+                if len(final_message) + len(suffix) <= MAX_MESSAGE_LENGTH:
+                     final_message += suffix
+
+            await self._send_message(ctx, final_message)
 
         except Exception as e:
-            await ctx.send(f"An unexpected error occurred. Please try again later.")
+            print(f"[ERROR][AuctionsCmd] Unexpected error processing auctions: {e}")
+            traceback.print_exc()
+            await self._send_message(ctx, "An unexpected error occurred while fetching auctions.")
 
     @commands.command(name='dungeon', aliases=['dungeons'])
     async def dungeon_command(self, ctx: commands.Context, *, ign: str | None = None):
-        """Shows the Catacombs level for a player."""
-        if not self.hypixel_api_key:
-            await ctx.send("Hypixel API is not configured. Please check the .env file.")
+        """Shows the player's Catacombs level and XP."""
+        profile_data = await self._get_player_profile_data(ctx, ign)
+        if not profile_data:
             return
 
-        if not self.http_session or self.http_session.closed:
-            await ctx.send("Error connecting to external APIs. Please try again later.")
-            return
+        target_ign, player_uuid, latest_profile = profile_data
+        profile_name = latest_profile.get('cute_name', 'Unknown')
 
-        target_ign = ign if ign else ctx.author.name
-        target_ign = target_ign.lstrip('@')
-        await ctx.send(f"Searching Catacombs level for '{target_ign}'...")
-        
         try:
-            player_uuid = await self.get_uuid_from_ign(target_ign)
-            if not player_uuid:
-                await ctx.send(f"Could not find Minecraft account for '{target_ign}'. Please check the username.")
-                return
-
-            profiles = await self.get_skyblock_data(player_uuid)
-            if profiles is None:
-                await ctx.send(f"Could not fetch SkyBlock profiles for '{target_ign}'. Player might be offline or has no profiles.")
-                return
-            if not profiles:
-                await ctx.send(f"'{target_ign}' seems to have no SkyBlock profiles yet.")
-                return
-
-            latest_profile = self.find_latest_profile(profiles, player_uuid)
-            if not latest_profile:
-                await ctx.send(f"Could not find an active profile for '{target_ign}'. Player must be a member of at least one profile.")
-                return
-
-            profile_name = latest_profile.get('cute_name', 'Unknown')
             member_data = latest_profile.get('members', {}).get(player_uuid, {})
-            dungeons_data = member_data.get('dungeons', {})
-            dungeon_types = dungeons_data.get('dungeon_types', {})
-            catacombs_data = dungeon_types.get('catacombs', {})
-            catacombs_xp = catacombs_data.get('experience', 0)
-            
+            dungeons_data = member_data.get('dungeons', {}).get('dungeon_types', {}).get('catacombs', {})
+            catacombs_xp = dungeons_data.get('experience', 0)
+
             level = self.calculate_dungeon_level(catacombs_xp)
-            await ctx.send(f"{target_ign}'s Catacombs level in profile '{profile_name}' is {level:.2f} (XP: {catacombs_xp:,.0f})")
+            await self._send_message(ctx, f"{target_ign}'s Catacombs level in profile '{profile_name}' is {level:.2f} (XP: {catacombs_xp:,.0f})")
 
         except Exception as e:
-            await ctx.send(f"An unexpected error occurred. Please try again later.")
+            print(f"[ERROR][DungeonCmd] Unexpected error processing dungeon data: {e}")
+            traceback.print_exc()
+            await self._send_message(ctx, "An unexpected error occurred while fetching Catacombs level.")
 
     @commands.command(name='sblvl')
     async def sblvl_command(self, ctx: commands.Context, *, ign: str | None = None):
-        """Shows the SkyBlock level for a player."""
-        if not self.hypixel_api_key:
-            await ctx.send("Hypixel API is not configured. Please check the .env file.")
+        """Shows the player's SkyBlock level (based on XP/100)."""
+        profile_data = await self._get_player_profile_data(ctx, ign)
+        if not profile_data:
             return
 
-        if not self.http_session or self.http_session.closed:
-            await ctx.send("Error connecting to external APIs. Please try again later.")
-            return
+        target_ign, player_uuid, latest_profile = profile_data
+        profile_name = latest_profile.get('cute_name', 'Unknown')
 
-        target_ign = ign if ign else ctx.author.name
-        target_ign = target_ign.lstrip('@')
-        await ctx.send(f"Searching SkyBlock level for '{target_ign}'...")
-        
         try:
-            player_uuid = await self.get_uuid_from_ign(target_ign)
-            if not player_uuid:
-                await ctx.send(f"Could not find Minecraft account for '{target_ign}'. Please check the username.")
-                return
-
-            profiles = await self.get_skyblock_data(player_uuid)
-            if profiles is None:
-                await ctx.send(f"Could not fetch SkyBlock profiles for '{target_ign}'. Player might be offline or has no profiles.")
-                return
-            if not profiles:
-                await ctx.send(f"'{target_ign}' seems to have no SkyBlock profiles yet.")
-                return
-
-            latest_profile = self.find_latest_profile(profiles, player_uuid)
-            if not latest_profile:
-                await ctx.send(f"Could not find an active profile for '{target_ign}'. Player must be a member of at least one profile.")
-                return
-
-            profile_name = latest_profile.get('cute_name', 'Unknown')
             member_data = latest_profile.get('members', {}).get(player_uuid, {})
             leveling_data = member_data.get('leveling', {})
-            # Get the raw experience value
-            sb_xp = leveling_data.get('experience', 0)
-            
-            # Calculate level by dividing XP by 100 as requested
+            sb_xp = leveling_data.get('experience', 0) # This is total profile XP, not level XP
+
+            # Calculate level by dividing XP by 100 as specifically requested
             sb_level = sb_xp / 100.0
-            
-            # Format output with 2 decimal places
-            await ctx.send(f"{target_ign}'s SkyBlock level in profile '{profile_name}' is {sb_level:.2f}.")
+
+            await self._send_message(ctx, f"{target_ign}'s SkyBlock level in profile '{profile_name}' is {sb_level:.2f}.")
 
         except Exception as e:
-            print(f"[Log][Error][sblvl] Unexpected error: {e}")
+            print(f"[ERROR][SblvlCmd] Unexpected error processing level data: {e}")
             traceback.print_exc()
-            await ctx.send(f"An unexpected error occurred while fetching SkyBlock level. Please try again later.")
-
-    def calculate_class_level(self, xp: float) -> float:
-        """Calculates the class level based on XP using the Catacombs XP table up to level 50."""
-        if 'catacombs_xp' not in self.leveling_data or not self.leveling_data['catacombs_xp']:
-            print("[Log][Error] Catacombs XP table not found or empty for class level calculation.")
-            return 0.0
-            
-        max_class_level = 50
-        # Use only the first 50 entries from the Catacombs XP table
-        xp_table = self.leveling_data['catacombs_xp'][:max_class_level]
-        
-        # Calculate total XP required for max class level (50)
-        total_xp_for_max_level = sum(xp_table)
-        
-        # If XP is higher than required for level 50, return 50.0
-        if xp >= total_xp_for_max_level:
-            return float(max_class_level)
-            
-        # Find level based on XP
-        total_xp_required = 0
-        level = 0
-        
-        for required_xp in xp_table: 
-            total_xp_required += required_xp
-            if xp >= total_xp_required:
-                level += 1
-            else:
-                # Calculate progress to next level
-                current_level_xp = total_xp_required - required_xp
-                next_level_xp = total_xp_required
-                # Avoid division by zero
-                if next_level_xp - current_level_xp == 0:
-                    progress = 0.0
-                else:
-                    progress = (xp - current_level_xp) / (next_level_xp - current_level_xp)
-                
-                # Return level + progress as a single float
-                return level + progress
-                
-        # Should only be reached if xp exactly matches total xp for a level < 50
-        return float(level) 
+            await self._send_message(ctx, "An unexpected error occurred while fetching SkyBlock level.")
 
     @commands.command(name='classaverage', aliases=['ca'])
     async def classaverage_command(self, ctx: commands.Context, *, ign: str | None = None):
         """Shows the player's dungeon class levels and their average."""
-        if not self.hypixel_api_key:
-            await ctx.send("Hypixel API is not configured. Please check the .env file.")
+        profile_data = await self._get_player_profile_data(ctx, ign)
+        if not profile_data:
             return
 
-        if not self.http_session or self.http_session.closed:
-            await ctx.send("Error connecting to external APIs. Please try again later.")
-            return
+        target_ign, player_uuid, latest_profile = profile_data
+        profile_name = latest_profile.get('cute_name', 'Unknown')
 
-        target_ign = ign if ign else ctx.author.name
-        target_ign = target_ign.lstrip('@')
-        await ctx.send(f"Searching class levels for '{target_ign}'...")
-        
         try:
-            player_uuid = await self.get_uuid_from_ign(target_ign)
-            if not player_uuid:
-                await ctx.send(f"Could not find Minecraft account for '{target_ign}'. Please check the username.")
-                return
-
-            profiles = await self.get_skyblock_data(player_uuid)
-            if profiles is None:
-                await ctx.send(f"Could not fetch SkyBlock profiles for '{target_ign}'. Player might be offline or has no profiles.")
-                return
-            if not profiles:
-                await ctx.send(f"'{target_ign}' seems to have no SkyBlock profiles yet.")
-                return
-
-            latest_profile = self.find_latest_profile(profiles, player_uuid)
-            if not latest_profile:
-                await ctx.send(f"Could not find an active profile for '{target_ign}'. Player must be a member of at least one profile.")
-                return
-
-            profile_name = latest_profile.get('cute_name', 'Unknown')
             member_data = latest_profile.get('members', {}).get(player_uuid, {})
             dungeons_data = member_data.get('dungeons', {})
-            player_classes_data = dungeons_data.get('player_classes', {})
+            player_classes_data = dungeons_data.get('player_classes', None) # Check for None
 
-            class_levels = {}
-            total_level = 0
-            class_names = ['healer', 'mage', 'berserk', 'archer', 'tank']
-
-            if not player_classes_data:
-                 await ctx.send(f"'{target_ign}' has no class data in profile '{profile_name}'.")
+            if player_classes_data is None:
+                 # Don't send message due to sending issues
+                 print(f"[INFO][ClassAvgCmd] No player_classes data found for {target_ign} in profile {profile_name}.")
+                 # await self._send_message(ctx, f"'{target_ign}' has no class data in profile '{profile_name}'.")
                  return
 
-            for class_name in class_names:
+            class_levels = {}
+            total_level = 0.0
+            valid_classes_counted = 0
+
+            for class_name in CLASS_NAMES:
                 class_xp = player_classes_data.get(class_name, {}).get('experience', 0)
                 level = self.calculate_class_level(class_xp)
                 class_levels[class_name.capitalize()] = level
                 total_level += level
-            
-            average_level = total_level / len(class_names) if class_names else 0
+                valid_classes_counted += 1 # Count even if level is 0
 
-            levels_str = " | ".join([f"{name} {lvl:.2f}" for name, lvl in class_levels.items()])
-            await ctx.send(f"{target_ign}'s class levels in profile '{profile_name}': {levels_str} | Average: {average_level:.2f}")
+            if valid_classes_counted > 0:
+                 average_level = total_level / valid_classes_counted
+                 levels_str = " | ".join([f"{name} {lvl:.2f}" for name, lvl in class_levels.items()])
+                 await self._send_message(ctx, f"{target_ign}'s class levels in profile '{profile_name}': {levels_str} | Average: {average_level:.2f}")
+            else:
+                 # Should not happen if CLASS_NAMES is populated, but safety check
+                 print(f"[WARN][ClassAvgCmd] No valid classes found to calculate average for {target_ign}.")
+                 await self._send_message(ctx, f"Could not calculate class average for '{target_ign}'.")
+
 
         except Exception as e:
-            print(f"[Log][Error][classaverage] Unexpected error: {e}")
+            print(f"[ERROR][ClassAvgCmd] Unexpected error processing class levels: {e}")
             traceback.print_exc()
-            await ctx.send(f"An unexpected error occurred while fetching class levels. Please try again later.")
+            await self._send_message(ctx, "An unexpected error occurred while fetching class levels.")
 
     @commands.command(name='mayor')
     async def mayor_command(self, ctx: commands.Context):
-        """Shows the current SkyBlock Mayor and their perks."""
-        if not self.http_session or self.http_session.closed:
-            await ctx.send("Error connecting to external APIs. Please try again later.")
+        """Shows the current SkyBlock Mayor and Minister."""
+        if not self.hypixel_api_key:
+            await self._send_message(ctx, "Error connecting to external APIs.")
             return
 
-        election_url = "https://api.hypixel.net/v2/resources/skyblock/election"
-        print(f"[Log][API] Fetching SkyBlock election data from {election_url}")
-        await ctx.send("Fetching current SkyBlock Mayor...")
-        
+        print(f"[DEBUG][API] Fetching SkyBlock election data from {HYPIXEL_ELECTION_URL}")
+        await ctx.send("Fetching current SkyBlock Mayor...") # Initial feedback
+
         try:
-            async with self.http_session.get(election_url) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    if data.get("success"):
-                        mayor_data = data.get('mayor')
-                        if mayor_data:
-                            mayor_name = mayor_data.get('name', 'Unknown')
-                            perks = mayor_data.get('perks', [])
-                            perk_names = [perk.get('name', '') for perk in perks if perk.get('name')]
-                            num_perks = len(perk_names)
-                            perks_str = " | ".join(perk_names)
-                            
-                            # Extract Minister info
-                            minister_data = mayor_data.get('minister')
-                            minister_str = ""
-                            if minister_data:
-                                minister_name = minister_data.get('name', 'Unknown')
-                                minister_perk = minister_data.get('perk', {}).get('name', 'Unknown Perk')
-                                minister_str = f" | Minister: {minister_name} ({minister_perk})"
-                            
-                            # Combine output
-                            output_message = f"Current skyblock mayor is {num_perks} perk {mayor_name} ({perks_str}){minister_str}"
-                            await ctx.send(output_message)
+            async with aiohttp.ClientSession() as session:
+                async with session.get(HYPIXEL_ELECTION_URL) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if data.get("success"):
+                            mayor_data = data.get('mayor')
+                            if mayor_data:
+                                mayor_name = mayor_data.get('name', 'Unknown')
+                                perks = mayor_data.get('perks', [])
+                                perk_names = [p.get('name', '') for p in perks if p.get('name')]
+                                perks_str = " | ".join(perk_names) if perk_names else "No Perks"
+                                num_perks = len(perk_names)
+
+                                # Extract Minister info
+                                minister_data = mayor_data.get('minister')
+                                minister_str = ""
+                                if minister_data:
+                                    minister_name = minister_data.get('name', 'Unknown')
+                                    minister_perk = minister_data.get('perk', {}).get('name', 'Unknown Perk')
+                                    minister_str = f" | Minister: {minister_name} ({minister_perk})"
+
+                                output_message = f"Current Mayor: {num_perks} perk {mayor_name} ({perks_str}){minister_str}"
+                                await self._send_message(ctx, output_message)
+                            else:
+                                await self._send_message(ctx, "Could not find current mayor data in the API response.")
                         else:
-                            await ctx.send("Could not find current mayor data in the API response.")
+                            await self._send_message(ctx, "API request failed (success=false). Could not fetch election data.")
                     else:
-                        await ctx.send("API request failed. Could not fetch election data.")
-                else:
-                    await ctx.send(f"Error fetching election data. API returned status {response.status}.")
+                        await self._send_message(ctx, f"Error fetching election data. API returned status {response.status}.")
 
         except aiohttp.ClientError as e:
-            print(f"[Log][API][Error] Network error fetching election data: {e}")
-            await ctx.send("Network error while fetching election data.")
+            print(f"[ERROR][API] Network error fetching election data: {e}")
+            await self._send_message(ctx, "Network error while fetching election data.")
         except json.JSONDecodeError:
-             print(f"[Log][API][Error] Failed to parse JSON from election API.")
-             await ctx.send("Error parsing election data from API.")
+             print(f"[ERROR][API] Failed to parse JSON from election API.")
+             await self._send_message(ctx, "Error parsing election data from API.")
         except Exception as e:
-            print(f"[Log][Error][mayor] Unexpected error: {e}")
+            print(f"[ERROR][MayorCmd] Unexpected error: {e}")
             traceback.print_exc()
-            await ctx.send(f"An unexpected error occurred while fetching mayor information.")
+            await self._send_message(ctx, "An unexpected error occurred while fetching mayor information.")
 
-    @commands.command(name='bank', aliases=['purse', 'money'])
+    @commands.command(name='bank', aliases=['purse', 'money', 'bal'])
     async def bank_command(self, ctx: commands.Context, *, ign: str | None = None):
-        """Shows the player's bank and purse balance."""
-        if not self.hypixel_api_key:
-            await ctx.send("Hypixel API is not configured. Please check the .env file.")
+        """Shows the player's bank, purse, and personal bank balance."""
+        profile_data = await self._get_player_profile_data(ctx, ign)
+        if not profile_data:
             return
 
-        if not self.http_session or self.http_session.closed:
-            await ctx.send("Error connecting to external APIs. Please try again later.")
-            return
+        target_ign, player_uuid, latest_profile = profile_data
+        profile_name = latest_profile.get('cute_name', 'Unknown')
 
-        target_ign = ign if ign else ctx.author.name
-        target_ign = target_ign.lstrip('@')
-        await ctx.send(f"Searching bank and purse balance for '{target_ign}'...")
-        
         try:
-            player_uuid = await self.get_uuid_from_ign(target_ign)
-            if not player_uuid:
-                await ctx.send(f"Could not find Minecraft account for '{target_ign}'. Please check the username.")
-                return
-
-            profiles = await self.get_skyblock_data(player_uuid)
-            if profiles is None:
-                await ctx.send(f"Could not fetch SkyBlock profiles for '{target_ign}'. Player might be offline or has no profiles.")
-                return
-            if not profiles:
-                await ctx.send(f"'{target_ign}' seems to have no SkyBlock profiles yet.")
-                return
-
-            latest_profile = self.find_latest_profile(profiles, player_uuid)
-            if not latest_profile:
-                await ctx.send(f"Could not find an active profile for '{target_ign}'. Player must be a member of at least one profile.")
-                return
-
-            profile_name = latest_profile.get('cute_name', 'Unknown')
-            
-            # Get Bank Balance (Profile wide)
+            # Bank Balance (Profile wide)
             banking_data = latest_profile.get('banking', {})
             bank_balance = banking_data.get('balance', 0.0)
-            
-            # Get Purse Balance (Member specific)
+
+            # Purse and Personal Bank (Member specific)
             member_data = latest_profile.get('members', {}).get(player_uuid, {})
             currencies_data = member_data.get('currencies', {})
             purse_balance = currencies_data.get('coin_purse', 0.0)
-            
-            # Get Personal Bank Balance (Member specific, if available)
-            profile_data = member_data.get('profile', {})
-            personal_bank_balance = profile_data.get('bank_account', None) # Use None to check if it exists
-            
+            personal_bank_balance = member_data.get('profile', {}).get('bank_account', None)
+
             # Construct the output message
-            output_message = f"{target_ign}'s bank: {bank_balance:,.0f}, Purse: {purse_balance:,.0f}"
+            parts = [
+                f"{target_ign}'s Bank: {bank_balance:,.0f}",
+                f"Purse: {purse_balance:,.0f}"
+            ]
             if personal_bank_balance is not None:
-                output_message += f", Personal Bank: {personal_bank_balance:,.0f}"
-            output_message += f" (Profile: '{profile_name}')"
-            
-            await ctx.send(output_message)
+                parts.append(f"Personal Bank: {personal_bank_balance:,.0f}")
+            parts.append(f"(Profile: '{profile_name}')")
+
+            output_message = ", ".join(parts)
+            await self._send_message(ctx, output_message)
 
         except Exception as e:
-            print(f"[Log][Error][bank] Unexpected error: {e}")
+            print(f"[ERROR][BankCmd] Unexpected error processing balance data: {e}")
             traceback.print_exc()
-            await ctx.send(f"An unexpected error occurred while fetching balance information.")
+            await self._send_message(ctx, "An unexpected error occurred while fetching balance information.")
 
     @commands.command(name='nucleus')
     async def nucleus_command(self, ctx: commands.Context, *, ign: str | None = None):
-        """Shows the number of Nucleus runs completed by the player."""
-        if not self.hypixel_api_key:
-            await ctx.send("Hypixel API is not configured. Please check the .env file.")
+        """Shows the calculated Nucleus runs based on placed crystals."""
+        profile_data = await self._get_player_profile_data(ctx, ign)
+        if not profile_data:
             return
 
-        if not self.http_session or self.http_session.closed:
-            await ctx.send("Error connecting to external APIs. Please try again later.")
-            return
+        target_ign, player_uuid, latest_profile = profile_data
+        profile_name = latest_profile.get('cute_name', 'Unknown')
 
-        target_ign = ign if ign else ctx.author.name
-        target_ign = target_ign.lstrip('@')
-        await ctx.send(f"Searching Nucleus runs for '{target_ign}'...")
-        
         try:
-            player_uuid = await self.get_uuid_from_ign(target_ign)
-            if not player_uuid:
-                await ctx.send(f"Could not find Minecraft account for '{target_ign}'. Please check the username.")
-                return
-
-            profiles = await self.get_skyblock_data(player_uuid)
-            if profiles is None:
-                await ctx.send(f"Could not fetch SkyBlock profiles for '{target_ign}'. Player might be offline or has no profiles.")
-                return
-            if not profiles:
-                await ctx.send(f"'{target_ign}' seems to have no SkyBlock profiles yet.")
-                return
-
-            latest_profile = self.find_latest_profile(profiles, player_uuid)
-            if not latest_profile:
-                await ctx.send(f"Could not find an active profile for '{target_ign}'. Player must be a member of at least one profile.")
-                return
-
-            profile_name = latest_profile.get('cute_name', 'Unknown')
             member_data = latest_profile.get('members', {}).get(player_uuid, {})
-            
-            # Corrected path for crystal data
             mining_core_data = member_data.get('mining_core', {})
             crystals_data = mining_core_data.get('crystals', {})
-            
-            # List of crystals to check (updated)
-            target_crystals = ['amber_crystal', 'topaz_crystal', 'amethyst_crystal', 'jade_crystal', 'sapphire_crystal']
+
             sum_total_placed = 0
-            
-            for crystal_key in target_crystals:
+            print(f"[DEBUG][NucleusCmd] Calculating for {target_ign} ({profile_name}):")
+            for crystal_key in NUCLEUS_CRYSTALS:
                 crystal_info = crystals_data.get(crystal_key, {})
                 total_placed = crystal_info.get('total_placed', 0)
                 sum_total_placed += total_placed
-                # Optional: Add debug print if needed
-                print(f"[Log][Debug][nucleus] Crystal: {crystal_key}, Placed: {total_placed}")
-            
+                print(f"  - {crystal_key}: {total_placed}") # Debug print activated
+
             # Calculate result: sum divided by 5, rounded down
             nucleus_result = sum_total_placed // 5
-            print(f"[Log][Debug][nucleus] Sum: {sum_total_placed}, Result (Sum // 5): {nucleus_result}")
+            print(f"[DEBUG][NucleusCmd] Sum: {sum_total_placed}, Result (Sum // 5): {nucleus_result}")
 
-            # Using the term 'nucleus runs' as requested for the output
-            await ctx.send(f"{target_ign}'s nucleus runs: {nucleus_result} (Profile: '{profile_name}')")
+            await self._send_message(ctx, f"{target_ign}'s nucleus runs: {nucleus_result})")
 
         except Exception as e:
-            print(f"[Log][Error][nucleus] Unexpected error: {e}")
+            print(f"[ERROR][NucleusCmd] Unexpected error processing nucleus data: {e}")
             traceback.print_exc()
-            await ctx.send(f"An unexpected error occurred while fetching Nucleus runs.")
+            await self._send_message(ctx, "An unexpected error occurred while fetching Nucleus runs.")
+
+    @commands.command(name='testsend')
+    async def testsend_command(self, ctx: commands.Context):
+        """Sends a simple test message to check channel connectivity."""
+        test_message = f"Simple test response for #{ctx.channel.name} at {datetime.now()}"
+        print(f"[DEBUG][TestSendCmd] Attempting send: {test_message}")
+        await self._send_message(ctx, test_message) # Use the helper send method
 
     # --- Cleanup ---
     async def close(self):
-        print("[Log] Bot wird heruntergefahren...")
-        await self.close_http_session()
+        """Gracefully shuts down the bot and closes sessions."""
+        print("[INFO] Shutting down bot...")
         await super().close()
-        print("[Log] Bot-Verbindung geschlossen.")
-
-    def calculate_dungeon_level(self, xp: float) -> float:
-        """Calculates the Catacombs level based on XP, including progress as decimal points."""
-        if not self.leveling_data['catacombs_xp']:
-            return 0.0
-            
-        max_level = 100  # Catacombs has a max level of 100
-        xp_table = self.leveling_data['catacombs_xp']
-        
-        # Calculate total XP for max level
-        total_xp = sum(xp_table)
-        
-        # If XP is higher than max XP in table, return max_level
-        if xp >= total_xp:
-            return float(max_level)
-            
-        # Find level based on XP
-        total_xp_required = 0
-        level = 0
-        
-        for required_xp in xp_table:
-            total_xp_required += required_xp
-            if xp >= total_xp_required:
-                level += 1
-            else:
-                # Calculate progress to next level
-                current_level_xp = total_xp_required - required_xp
-                next_level_xp = total_xp_required
-                # Avoid division by zero if required_xp is 0 for some reason
-                if next_level_xp - current_level_xp == 0:
-                    progress = 0.0
-                else:
-                    progress = (xp - current_level_xp) / (next_level_xp - current_level_xp)
-                
-                # Return level + progress as a single float
-                return level + progress
-                
-        # Should theoretically not be reached if xp < total_xp, but return level just in case
-        return float(level)
+        print("[INFO] Bot connection closed.")
