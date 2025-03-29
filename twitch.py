@@ -6,6 +6,7 @@ import os
 import aiohttp
 import traceback
 import time
+from datetime import datetime
 # No longer need SimpleNamespace if using handle_commands
 # from types import SimpleNamespace
 
@@ -26,20 +27,15 @@ class Bot(commands.Bot):
     # Add them back here or ensure they are present in your file.
 
     # --- PASTE PREVIOUS METHODS HERE ---
-    def __init__(self, token: str, prefix: str, nickname: str, initial_channel: str, hypixel_api_key: str | None):
-        self.target_channel_name = initial_channel.lower()
-        self.target_channel_obj = None
+    def __init__(self, token: str, prefix: str, nickname: str, initial_channels: list[str], hypixel_api_key: str | None):
+        """Initialisiert den Bot."""
+        self.start_time = datetime.now()
         self.hypixel_api_key = hypixel_api_key
-        self.http_session = None
+        self.http_session: aiohttp.ClientSession | None = None
         self.leveling_data = self._load_leveling_data()
 
-        super().__init__(
-            token=token,
-            prefix=prefix,
-            nick=nickname,
-            initial_channels=[self.target_channel_name]
-        )
-        print(f"Bot initialisiert für Nick: {nickname}, Channel: #{self.target_channel_name}, Prefix: '{prefix}'")
+        super().__init__(token=token, prefix=prefix, nick=nickname, initial_channels=initial_channels)
+        print(f"[Log] Bot initialisiert für Kanäle: {initial_channels}")
 
     async def start_http_session(self):
         if self.http_session is None or self.http_session.closed:
@@ -398,44 +394,37 @@ class Bot(commands.Bot):
             print("[Log][EventReady] Printing login info...")
             print(f'------')
             print(f'Login erfolgreich als: {self.nick}')
-            print(f'Verbunden mit Channel: #{self.target_channel_name}')
+            # Log the list of channels the bot has actually connected to
+            connected_channel_names = [ch.name for ch in self.connected_channels]
+            print(f'Verbunden mit Kanälen: {connected_channel_names}') 
             print(f'User ID: {self.user_id}')
             print(f'------')
             print("[Log][EventReady] Login info printed.")
 
-            print(f"[Log][EventReady] Attempting to get channel object for: #{self.target_channel_name}...")
-            self.target_channel_obj = self.get_channel(self.target_channel_name)
-            print(f"[Log][EventReady] get_channel call completed. Result: {self.target_channel_obj}")
-
-            if self.target_channel_obj:
-                print(f"[Log][EventReady] Channel object found: {self.target_channel_obj.name}")
+            # Check if the bot connected to any channels
+            if self.connected_channels:
+                print(f"[Log][EventReady] Bot erfolgreich mit {len(self.connected_channels)} Kanal/Kanälen verbunden.")
                 print("Bot ist bereit!")
-                print("Verfügbare Befehle:")
-                print(f"- {self._prefix}ping")
-                print(f"- {self._prefix}skills [spielername]")
-                print(f"- {self._prefix}reload")
             else:
-                print(f"FEHLER: Konnte das Channel-Objekt für #{self.target_channel_name} nicht abrufen nach der Verbindung.")
-                print("Mögliche Ursachen: Tippfehler im Channelnamen (.env)?, Bot nicht im Channel?, Twitch-Verzögerung?")
-                print("[Log][EventReady] Closing bot due to missing channel object...")
-                await self.close()
-
-            print("[Log][EventReady] Exiting event_ready normally.")
+                print("[Log][EventReady][Warnung] Bot konnte sich mit keinen Kanälen verbinden.")
 
         except Exception as e:
-            print(f"[Log][EventReady][FATAL ERROR] Exception occurred in event_ready: {e}")
+            print(f"[Log][Error][EventReady] Fehler in event_ready: {e}")
             traceback.print_exc()
-            print("[Log][EventReady] Closing bot due to fatal error in event_ready...")
-            await self.close()
 
     async def event_message(self, message):
         """Verarbeitet eingehende Twitch-Nachrichten."""
         if message.echo:
             return  # Ignoriere Echo-Nachrichten (Nachrichten vom Bot selbst)
 
-        # Prüfe, ob die Nachricht von einem echten Twitch-Channel kommt
-        if not hasattr(message.channel, 'name') or message.channel.name != self.target_channel_name:
-            return  # Ignoriere Nachrichten von anderen Channels
+        # Get the names of channels the bot is currently connected to
+        connected_channel_names = [ch.name for ch in self.connected_channels]
+
+        # Check if the message came from a real Twitch channel and if it's one the bot is connected to
+        if not hasattr(message.channel, 'name') or message.channel.name not in connected_channel_names:
+            # Optional: Log that a message from an unexpected channel was received
+            # print(f"[Log][Debug] Ignored message from unexpected channel: {message.channel.name}")
+            return # Ignore messages from channels the bot isn't connected to or invalid channel objects
 
         # Prüfe, ob die Nachricht von einem echten Twitch-User kommt
         if not hasattr(message.author, 'name') or not message.author.name:

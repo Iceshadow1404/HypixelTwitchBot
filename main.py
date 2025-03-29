@@ -11,9 +11,10 @@ def load_config():
     config = {
         'token': os.getenv('TWITCH_OAUTH_TOKEN'),
         'nickname': os.getenv('TWITCH_NICKNAME'),
-        'target_channel': os.getenv('TARGET_CHANNEL'),
+        # Read comma-separated channels instead of a single channel
+        'twitch_channels_str': os.getenv('TWITCH_CHANNELS'), 
         'prefix': '#', # Setzt das Prefix fest
-        'hypixel_api_key': os.getenv('HYPIXEL_API_KEY') # NEU
+        'hypixel_api_key': os.getenv('HYPIXEL_API_KEY') 
     }
 
     if not config['token'] or not config['token'].startswith('oauth:'):
@@ -25,21 +26,26 @@ def load_config():
         print("Fehler: TWITCH_NICKNAME fehlt in deiner .env Datei.")
         return None
 
-    if not config['target_channel']:
-        print("Fehler: TARGET_CHANNEL fehlt in deiner .env Datei.")
+    # Validate and process the list of channels
+    if not config['twitch_channels_str']:
+        print("Fehler: TWITCH_CHANNELS fehlt in deiner .env Datei.")
         return None
+    
+    # Split the string into a list, remove whitespace, and convert to lowercase
+    initial_channels = [ch.strip().lower() for ch in config['twitch_channels_str'].split(',') if ch.strip()]
+    if not initial_channels:
+        print("Fehler: TWITCH_CHANNELS enthält keine gültigen Kanalnamen.")
+        return None
+    config['initial_channels'] = initial_channels # Store the list
+    del config['twitch_channels_str'] # Remove the original string
 
-    if not config['hypixel_api_key']:  # NEU: Validierung für Hypixel Key
+    if not config['hypixel_api_key']:  
         print("Fehler: HYPIXEL_API_KEY fehlt in deiner .env Datei.")
         print("Du kannst einen Schlüssel hier beantragen: https://developer.hypixel.net/")
-        # Optional: Entscheide, ob der Bot ohne Key starten soll oder nicht
-        # return None # Bot nicht starten
-        print("Warnung: Bot startet ohne Hypixel API Funktionalität.")  # Bot starten, aber Befehle fehlschlagen lassen
+        print("Warnung: Bot startet ohne Hypixel API Funktionalität.")  
 
-    # Stelle sicher, dass der Nickname klein geschrieben ist (wichtig für twitchio)
+    # Ensure nickname is lowercase
     config['nickname'] = config['nickname'].lower()
-    # Stelle sicher, dass der Channelname klein geschrieben ist
-    config['target_channel'] = config['target_channel'].lower()
 
     return config
 
@@ -48,14 +54,15 @@ if __name__ == "__main__":
     config = load_config()
 
     if config:
-        print("Konfiguration geladen. Starte Bot...")
-        # Übergebe den API Key an den Bot Konstruktor
+        print(f"Konfiguration geladen. Bot wird versuchen, Kanälen beizutreten: {config['initial_channels']}")
+        print("Starte Bot...")
+        # Pass the list of channels to the Bot constructor
         bot = Bot(
             token=config['token'],
             prefix=config['prefix'],
             nickname=config['nickname'],
-            initial_channel=config['target_channel'],
-            hypixel_api_key=config['hypixel_api_key'] # NEU
+            initial_channels=config['initial_channels'], # Changed from initial_channel
+            hypixel_api_key=config['hypixel_api_key'] 
         )
         try:
             bot.run()
