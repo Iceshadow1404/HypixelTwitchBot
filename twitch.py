@@ -895,6 +895,68 @@ class Bot(commands.Bot):
             traceback.print_exc()
             await ctx.send(f"An unexpected error occurred while fetching mayor information.")
 
+    @commands.command(name='bank', aliases=['purse', 'money'])
+    async def bank_command(self, ctx: commands.Context, *, ign: str | None = None):
+        """Shows the player's bank and purse balance."""
+        if not self.hypixel_api_key:
+            await ctx.send("Hypixel API is not configured. Please check the .env file.")
+            return
+
+        if not self.http_session or self.http_session.closed:
+            await ctx.send("Error connecting to external APIs. Please try again later.")
+            return
+
+        target_ign = ign if ign else ctx.author.name
+        target_ign = target_ign.lstrip('@')
+        await ctx.send(f"Searching bank and purse balance for '{target_ign}'...")
+        
+        try:
+            player_uuid = await self.get_uuid_from_ign(target_ign)
+            if not player_uuid:
+                await ctx.send(f"Could not find Minecraft account for '{target_ign}'. Please check the username.")
+                return
+
+            profiles = await self.get_skyblock_data(player_uuid)
+            if profiles is None:
+                await ctx.send(f"Could not fetch SkyBlock profiles for '{target_ign}'. Player might be offline or has no profiles.")
+                return
+            if not profiles:
+                await ctx.send(f"'{target_ign}' seems to have no SkyBlock profiles yet.")
+                return
+
+            latest_profile = self.find_latest_profile(profiles, player_uuid)
+            if not latest_profile:
+                await ctx.send(f"Could not find an active profile for '{target_ign}'. Player must be a member of at least one profile.")
+                return
+
+            profile_name = latest_profile.get('cute_name', 'Unknown')
+            
+            # Get Bank Balance (Profile wide)
+            banking_data = latest_profile.get('banking', {})
+            bank_balance = banking_data.get('balance', 0.0)
+            
+            # Get Purse Balance (Member specific)
+            member_data = latest_profile.get('members', {}).get(player_uuid, {})
+            currencies_data = member_data.get('currencies', {})
+            purse_balance = currencies_data.get('coin_purse', 0.0)
+            
+            # Get Personal Bank Balance (Member specific, if available)
+            profile_data = member_data.get('profile', {})
+            personal_bank_balance = profile_data.get('bank_account', None) # Use None to check if it exists
+            
+            # Construct the output message
+            output_message = f"{target_ign}'s bank: {bank_balance:,.0f}, Purse: {purse_balance:,.0f}"
+            if personal_bank_balance is not None:
+                output_message += f", Personal Bank: {personal_bank_balance:,.0f}"
+            output_message += f" (Profile: '{profile_name}')"
+            
+            await ctx.send(output_message)
+
+        except Exception as e:
+            print(f"[Log][Error][bank] Unexpected error: {e}")
+            traceback.print_exc()
+            await ctx.send(f"An unexpected error occurred while fetching balance information.")
+
     # --- Cleanup ---
     async def close(self):
         print("[Log] Bot wird heruntergefahren...")
