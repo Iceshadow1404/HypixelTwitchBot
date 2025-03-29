@@ -687,6 +687,57 @@ class Bot(commands.Bot):
         except Exception as e:
             await ctx.send(f"An unexpected error occurred. Please try again later.")
 
+    @commands.command(name='sblvl')
+    async def sblvl_command(self, ctx: commands.Context, *, ign: str | None = None):
+        """Shows the SkyBlock level for a player."""
+        if not self.hypixel_api_key:
+            await ctx.send("Hypixel API is not configured. Please check the .env file.")
+            return
+
+        if not self.http_session or self.http_session.closed:
+            await ctx.send("Error connecting to external APIs. Please try again later.")
+            return
+
+        target_ign = ign if ign else ctx.author.name
+        target_ign = target_ign.lstrip('@')
+        await ctx.send(f"Searching SkyBlock level for '{target_ign}'...")
+        
+        try:
+            player_uuid = await self.get_uuid_from_ign(target_ign)
+            if not player_uuid:
+                await ctx.send(f"Could not find Minecraft account for '{target_ign}'. Please check the username.")
+                return
+
+            profiles = await self.get_skyblock_data(player_uuid)
+            if profiles is None:
+                await ctx.send(f"Could not fetch SkyBlock profiles for '{target_ign}'. Player might be offline or has no profiles.")
+                return
+            if not profiles:
+                await ctx.send(f"'{target_ign}' seems to have no SkyBlock profiles yet.")
+                return
+
+            latest_profile = self.find_latest_profile(profiles, player_uuid)
+            if not latest_profile:
+                await ctx.send(f"Could not find an active profile for '{target_ign}'. Player must be a member of at least one profile.")
+                return
+
+            profile_name = latest_profile.get('cute_name', 'Unknown')
+            member_data = latest_profile.get('members', {}).get(player_uuid, {})
+            leveling_data = member_data.get('leveling', {})
+            # Get the raw experience value
+            sb_xp = leveling_data.get('experience', 0)
+            
+            # Calculate level by dividing XP by 100 as requested
+            sb_level = sb_xp / 100.0
+            
+            # Format output with 2 decimal places
+            await ctx.send(f"{target_ign}'s SkyBlock level in profile '{profile_name}' is {sb_level:.2f}.")
+
+        except Exception as e:
+            print(f"[Log][Error][sblvl] Unexpected error: {e}")
+            traceback.print_exc()
+            await ctx.send(f"An unexpected error occurred while fetching SkyBlock level. Please try again later.")
+
     # --- Cleanup ---
     async def close(self):
         print("[Log] Bot wird heruntergefahren...")
