@@ -919,13 +919,6 @@ class Bot(commands.Bot):
             traceback.print_exc()
             await self._send_message(ctx, "An unexpected error occurred while fetching Nucleus runs.")
 
-    @commands.command(name='testsend')
-    async def testsend_command(self, ctx: commands.Context):
-        """Sends a simple test message to check channel connectivity."""
-        test_message = f"Simple test response for #{ctx.channel.name} at {datetime.now()}"
-        print(f"[DEBUG][TestSendCmd] Attempting send: {test_message}")
-        await self._send_message(ctx, test_message) # Use the helper send method
-
     @commands.command(name='hotm')
     async def hotm_command(self, ctx: commands.Context, *, ign: str | None = None):
         """Shows the player's Heart of the Mountain level."""
@@ -997,6 +990,39 @@ class Bot(commands.Bot):
         info_message = "Networth calculation isn't possible with this bot. Use SkyHelper or Soopy for accurate networth."
         print(f"[COMMAND] Networth info command triggered by {ctx.author.name} in #{ctx.channel.name}")
         await self._send_message(ctx, info_message)
+
+    @commands.command(name='help')
+    async def help_command(self, ctx: commands.Context):
+        """Shows this help message listing all available commands."""
+        print(f"[COMMAND] Help command triggered by {ctx.author.name} in #{ctx.channel.name}")
+        prefix = self._prefix # Get the bot's prefix
+        
+        help_parts = [f"Available commands (Prefix: {prefix}):"]
+        
+        # Sort commands alphabetically for clarity
+        command_list = sorted(self.commands.values(), key=lambda cmd: cmd.name)
+        
+        for cmd in command_list:
+            # Skip hidden commands if any were added later
+            # if cmd.hidden:
+            #     continue
+                
+            # Format aliases
+            aliases = f" (Aliases: {', '.join(cmd.aliases)})" if cmd.aliases else ""
+            
+            # Get description from docstring (first line)
+            description = "No description available." # Default
+            if cmd._callback.__doc__:
+                first_line = cmd._callback.__doc__.strip().split('\n')[0]
+                description = first_line
+                
+            help_parts.append(f"- {prefix}{cmd.name}{aliases}")
+            
+        # Join parts into a single message (consider potential length limits)
+        # For now, send as one message. If it gets too long, splitting logic would be needed.
+        help_message = " ".join(help_parts) # Use space as separator for better readability in chat
+        
+        await self._send_message(ctx, help_message)
 
     # --- Cleanup ---
     async def close(self):
