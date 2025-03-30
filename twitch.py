@@ -4,6 +4,7 @@ import json
 import os
 import traceback
 from datetime import datetime
+import math
 
 import aiohttp
 from twitchio.ext import commands
@@ -24,6 +25,9 @@ CLASS_NAMES = ['healer', 'mage', 'berserk', 'archer', 'tank']
 NUCLEUS_CRYSTALS = ['amber_crystal', 'topaz_crystal', 'amethyst_crystal', 'jade_crystal', 'sapphire_crystal']
 ESSENCE_TYPES = ['WITHER', 'DRAGON', 'DIAMOND', 'SPIDER', 'UNDEAD', 'GOLD', 'ICE', 'CRIMSON']
 SLAYER_BOSS_KEYS = ['zombie', 'spider', 'wolf', 'enderman', 'blaze', 'vampire']
+BASE_M6_CLASS_XP = 105000 # From runs-to-class-average.ts
+BASE_M7_CLASS_XP = 340000 # From runs-to-class-average.ts
+PAUL_MULTIPLIER = 1.0 # Paul perk not considered
 
 MAX_MESSAGE_LENGTH = 480 # Approx limit to avoid Twitch cutting messages
 
@@ -111,7 +115,9 @@ class Bot(commands.Bot):
                         uuid = data.get('id')
                         if not uuid:
                             print(f"[WARN][API] Mojang API: No UUID found for '{username}'.")
-                        return uuid
+                            # Return None if UUID is not found, even if status is 200
+                            return None 
+                        return uuid # Return UUID if found
                     elif response.status == 204: # No content -> User not found
                         print(f"[WARN][API] Mojang API: Username '{username}' not found.")
                         return None
@@ -139,39 +145,39 @@ class Bot(commands.Bot):
                 async with session.get(HYPIXEL_API_URL, params=params) as response:
                     print(f"[DEBUG][API] Hypixel profiles response status: {response.status}")
                     response_text = await response.text() # Read text first for debugging
-                    if response.status == 200:
+                if response.status == 200:
+                    try:
+                        data = json.loads(response_text)
+                        # Save the full response for debugging
+                        debug_file = f"hypixel_response_{uuid}.json"
                         try:
-                            data = json.loads(response_text)
-                            # Save the full response for debugging
-                            debug_file = f"hypixel_response_{uuid}.json"
-                            try:
-                                with open(debug_file, 'w', encoding='utf-8') as f:
-                                    json.dump(data, f, indent=4)
-                                print(f"[DEBUG][API] Hypixel response saved to '{debug_file}'.")
-                            except IOError as io_err:
-                                 print(f"[WARN][API] Failed to save debug file '{debug_file}': {io_err}")
+                            with open(debug_file, 'w', encoding='utf-8') as f:
+                                json.dump(data, f, indent=4)
+                            print(f"[DEBUG][API] Hypixel response saved to '{debug_file}'.")
+                        except IOError as io_err:
+                             print(f"[WARN][API] Failed to save debug file '{debug_file}': {io_err}")
 
-                            if data.get("success"):
-                                profiles = data.get('profiles')
-                                if profiles is None:
+                        if data.get("success"):
+                            profiles = data.get('profiles')
+                            if profiles is None:
                                      print(f"[WARN][API] Hypixel API success, but 'profiles' field is missing or null for {uuid}.")
                                      return [] # Return empty list instead of None if success=true but no profiles
-                                if not isinstance(profiles, list):
-                                    print(f"[ERROR][API] Hypixel API success, but 'profiles' is not a list ({type(profiles)}).")
-                                    return None
-                                return profiles
-                            else:
-                                reason = data.get('cause', 'Unknown reason')
-                                print(f"[ERROR][API] Hypixel API request failed: {reason}")
+                            if not isinstance(profiles, list):
+                                print(f"[ERROR][API] Hypixel API success, but 'profiles' is not a list ({type(profiles)}).")
                                 return None
-                        except json.JSONDecodeError as json_e:
-                            print(f"[ERROR][API] Error decoding Hypixel JSON response: {json_e}")
-                            print(f"--- Response Text Start ---\n{response_text}\n--- Response Text End ---")
+                            return profiles
+                        else:
+                            reason = data.get('cause', 'Unknown reason')
+                            print(f"[ERROR][API] Hypixel API request failed: {reason}")
                             return None
-                    else:
-                        print(f"[ERROR][API] Hypixel API request failed: Status {response.status}")
+                    except json.JSONDecodeError as json_e:
+                        print(f"[ERROR][API] Error decoding Hypixel JSON response: {json_e}")
                         print(f"--- Response Text Start ---\n{response_text}\n--- Response Text End ---")
                         return None
+                else:
+                    print(f"[ERROR][API] Hypixel API request failed: Status {response.status}")
+                    print(f"--- Response Text Start ---\n{response_text}\n--- Response Text End ---")
+                    return None
         except aiohttp.ClientError as e:
             print(f"[ERROR][API] Network error during Hypixel API request: {e}")
             return None
@@ -221,6 +227,35 @@ class Bot(commands.Bot):
 
         return target_ign, player_uuid, latest_profile
 
+    # Add the missing helper function here
+    def _get_xp_for_target_level(self, target_level: int) -> float:
+        """Calculates the total cumulative XP required to COMPLETE a target level.
+        Uses the Catacombs XP table.
+        Target level is 1-based (e.g., target_level=50 means completing level 50).
+        """
+        if not self.leveling_data['catacombs_xp']:
+            print("[WARN][Calc] Catacombs XP table not loaded for _get_xp_for_target_level.")
+            return float('inf') # Return infinity if data is missing
+            
+        xp_table = self.leveling_data['catacombs_xp']
+        target_level_index = target_level - 1 # Convert 1-based level to 0-based index
+        
+        if target_level_index < 0:
+            return 0.0 # Cannot complete level 0 or less
+
+        # Ensure index doesn't go out of bounds for slicing
+        max_index = len(xp_table)
+        if target_level_index >= max_index:
+             print(f"[WARN][Calc] Target level {target_level} exceeds Catacombs XP table length ({len(xp_table)}). Using XP for max level.")
+             # Sum the entire table if target level is beyond max level
+             total_xp = sum(xp_table)
+             return float(total_xp)
+
+        # Sum XP required for levels 1 through target_level (indices 0 through target_level_index)
+        # Slicing [:index+1] goes up to and includes the index.
+        total_xp = sum(xp_table[:target_level_index + 1]) 
+        print(f"[DEBUG][Calc] XP to complete Level {target_level} (sum index 0 to {target_level_index}): {total_xp:,.0f}") # Added debug
+        return float(total_xp)
 
     # --- Calculation Methods ---
 
@@ -952,7 +987,7 @@ class Bot(commands.Bot):
         """Shows the player's Heart of the Mountain level."""
         profile_data = await self._get_player_profile_data(ctx, ign)
         if not profile_data:
-            return
+             return
 
         target_ign, player_uuid, latest_profile = profile_data
         profile_name = latest_profile.get('cute_name', 'Unknown')
@@ -975,7 +1010,7 @@ class Bot(commands.Bot):
         """Shows the player's essence amounts."""
         profile_data = await self._get_player_profile_data(ctx, ign)
         if not profile_data:
-            return
+             return
 
         target_ign, player_uuid, latest_profile = profile_data
         profile_name = latest_profile.get('cute_name', 'Unknown')
@@ -1129,6 +1164,208 @@ class Bot(commands.Bot):
         help_message = " ".join(help_parts) # Use space as separator for better readability in chat
         
         await self._send_message(ctx, help_message)
+
+    @commands.command(name='rtca')
+    async def rtca_command(self, ctx: commands.Context, *, args: str | None = None):
+        """Estimates M6/M7 runs needed for a target class average using simulation.
+        Syntax: #rtca <username> [target_ca=50] [floor=m7]
+        Simulates runs considering 100% active XP / 25% passive XP.
+        """
+        print(f"[COMMAND] Rtca command triggered by {ctx.author.name}: {args}")
+        if not args:
+            await self._send_message(ctx, f"Usage: {self.prefix}rtca <username> [target_ca=50] [floor=m7]")
+            return
+
+        # --- 1. Argument Parsing ---
+        parts = args.split()
+        ign = parts[0]
+        target_ca_str = '50' # Default target CA
+        floor_str = 'm7'   # Default floor
+        
+        try:
+            if len(parts) > 1:
+                target_ca_str = parts[1]
+            if len(parts) > 2:
+                floor_str = parts[2].lower() # Normalize floor to lowercase
+            if len(parts) > 3:
+                 await self._send_message(ctx, f"Too many arguments. Usage: {self.prefix}rtca <username> [target_ca=50] [floor=m7]")
+                 return
+
+            # Validate target_ca
+            target_ca_milestone = int(target_ca_str)
+            if not 1 <= target_ca_milestone <= 50:
+                raise ValueError("Target CA must be between 1 and 50.")
+
+            # Validate floor
+            if floor_str not in ['m6', 'm7']:
+                 raise ValueError("Invalid floor. Please specify 'm6' or 'm7'.")
+                 
+        except ValueError as e:
+            await self._send_message(ctx, f"Invalid argument: {e}. Usage: {self.prefix}rtca <username> [target_ca=50] [floor=m7]")
+            return
+        # --- End Argument Parsing ---
+
+        # --- 2. Fetch Player Data ---
+        profile_data = await self._get_player_profile_data(ctx, ign)
+        if not profile_data:
+            return # Error message already sent by helper
+
+        target_ign, player_uuid, latest_profile = profile_data
+        profile_name = latest_profile.get('cute_name', 'Unknown')
+        # --- End Fetch Player Data ---
+
+        try:
+            member_data = latest_profile.get('members', {}).get(player_uuid, {})
+            dungeons_data = member_data.get('dungeons', {})
+            player_classes_data = dungeons_data.get('player_classes', None)
+
+            if player_classes_data is None:
+                 print(f"[INFO][RtcaCmd] No player_classes data found for {target_ign} in profile {profile_name}.")
+                 await self._send_message(ctx, f"'{target_ign}' has no class data in profile '{profile_name}'.")
+                 return
+
+            # --- 3. Calculate Current State ---
+            current_class_levels = {}
+            total_level_sum = 0.0
+            class_xps = {}
+            for class_name in CLASS_NAMES:
+                class_xp = player_classes_data.get(class_name, {}).get('experience', 0)
+                level = self.calculate_class_level(class_xp) # Uses Catacombs table, max 50
+                current_class_levels[class_name] = level
+                class_xps[class_name] = class_xp
+                total_level_sum += level
+            
+            current_ca = total_level_sum / len(CLASS_NAMES) if CLASS_NAMES else 0.0
+            print(f"[DEBUG][RtcaCmd] {target_ign} - Current CA: {current_ca:.2f}, Target CA: {target_ca_milestone}")
+
+            # Check if target is already reached
+            if current_ca >= target_ca_milestone:
+                 await self._send_message(ctx, f"{target_ign} (CA {current_ca:.2f}) has already reached or surpassed the target Class Average {target_ca_milestone}.")
+                 return
+            # --- End Calculate Current State ---
+
+            # --- 4. Setup Simulation Parameters ---
+            target_level_for_milestone = target_ca_milestone # Target level for each class is the target CA
+
+            # Determine XP per run based on selected floor
+            if floor_str == 'm6':
+                xp_per_run = BASE_M6_CLASS_XP
+                selected_floor_name = "M6"
+            else: # Default or 'm7'
+                xp_per_run = BASE_M7_CLASS_XP
+                selected_floor_name = "M7"
+                
+            # --- TEMPORARY TEST: Increase XP by 10% ---
+            xp_per_run *= 1.06
+            print(f"[DEBUG][RtcaCmd][TEST] Applying +10% XP boost. New XP/Run: {xp_per_run:,.0f}")
+            # -----------------------------------------
+
+            if xp_per_run <= 0: # Safety check
+                print(f"[ERROR][RtcaCmd] Base XP per run is zero or negative for {selected_floor_name}.")
+                await self._send_message(ctx, "Error with base XP configuration. Cannot estimate runs.")
+                return
+
+            # Calculate target XP threshold (XP needed to COMPLETE the target level)
+            xp_required_for_target_level = self._get_xp_for_target_level(target_level_for_milestone)
+            print(f"[DEBUG][RtcaCmd] Target Level XP Threshold: {xp_required_for_target_level:,.0f}")
+            print(f"[DEBUG][RtcaCmd] XP/Run Used ({selected_floor_name}): {xp_per_run:,.0f}")
+            # --- End Setup Simulation Parameters ---
+
+            # --- 5. Initialize Simulation ---
+            total_runs_simulated = 0
+            xp_needed_dict = {} # Stores remaining XP needed for each class
+            active_runs_per_class = {cn: 0 for cn in CLASS_NAMES} # Tracks active runs per class
+            
+            print(f"[DEBUG][RtcaSim] --- Initializing Simulation Needs ---")
+            for class_name in CLASS_NAMES:
+                current_xp = class_xps[class_name]
+                current_lvl = current_class_levels[class_name]
+                if current_lvl < target_level_for_milestone:
+                    needed = xp_required_for_target_level - current_xp
+                    if needed > 0:
+                        xp_needed_dict[class_name] = needed
+                        print(f"[DEBUG][RtcaSim] Initial Need - {class_name.capitalize()}: {needed:,.0f} XP")
+                    else:
+                        print(f"[DEBUG][RtcaSim] Initial Need - {class_name.capitalize()}: 0 XP (Already Met)")
+                else:
+                    print(f"[DEBUG][RtcaSim] Initial Need - {class_name.capitalize()}: 0 XP (Level Met)")
+
+            # Check if simulation is necessary
+            if not xp_needed_dict:
+                await self._send_message(ctx, f"{target_ign} already meets the XP requirements for CA {target_ca_milestone}. Runs needed: 0")
+                return
+            # --- End Initialize Simulation ---
+
+            # --- 6. Run Simulation ---
+            print(f"[DEBUG][RtcaSim] --- Starting Simulation Loop ---")
+            max_iterations = 100000 # Safety break
+            iteration = 0
+            active_gain = xp_per_run
+            passive_gain = 0.25 * xp_per_run
+            
+            while xp_needed_dict and iteration < max_iterations:
+                iteration += 1
+                total_runs_simulated += 1
+
+                # Find bottleneck class (needs most runs if played actively)
+                bottleneck_class = None
+                max_runs_if_active = -1
+                for cn, needed in xp_needed_dict.items():
+                    runs_if_active = math.ceil(needed / xp_per_run)
+                    if runs_if_active > max_runs_if_active:
+                        max_runs_if_active = runs_if_active
+                        bottleneck_class = cn
+                    # Optional: Add tie-breaking logic here if needed
+
+                if bottleneck_class is None: # Should not happen if xp_needed_dict is not empty
+                    print("[ERROR][RtcaSim] Could not determine bottleneck class during simulation. Breaking loop.")
+                    break
+                
+                # Track the active class for this run
+                active_runs_per_class[bottleneck_class] += 1 
+
+                # Apply XP gains and update needed XP for the next iteration
+                next_xp_needed = {}
+                for cn, needed in xp_needed_dict.items():
+                    xp_gained = active_gain if cn == bottleneck_class else passive_gain
+                    remaining_needed = needed - xp_gained
+                    if remaining_needed > 0:
+                        next_xp_needed[cn] = remaining_needed
+                    # else: Optional: log class completion here
+                
+                xp_needed_dict = next_xp_needed # Update for the next loop iteration
+
+            print(f"[DEBUG][RtcaSim] --- Simulation Finished after {iteration} iterations ---")
+            print(f"[DEBUG][RtcaSim] Total Runs Simulated: {total_runs_simulated}")
+            print(f"[DEBUG][RtcaSim] Active Runs Breakdown: {active_runs_per_class}") 
+            if iteration >= max_iterations:
+                 print(f"[ERROR][RtcaSim] Simulation reached max iterations ({max_iterations}). Result might be inaccurate.")
+            # --- End Run Simulation ---
+
+            # --- 7. Format and Send Output ---
+            breakdown_parts = [f"{cn.capitalize()}: {count}" for cn, count in active_runs_per_class.items() if count > 0]
+            breakdown_str = " | Active Runs: " + ", ".join(breakdown_parts) if breakdown_parts else ""
+
+            base_message = (
+                f"{target_ign} (CA {current_ca:.2f}) -> Target CA {target_ca_milestone}: "
+                f"Needs approx. {total_runs_simulated:,} {selected_floor_name} runs "
+                f"(@ {xp_per_run:,.0f} XP/run)."
+            )
+            
+            output_message = base_message + breakdown_str
+            
+            # Check length and potentially remove breakdown if too long
+            if len(output_message) > MAX_MESSAGE_LENGTH:
+                print("[WARN][RtcaCmd] Output message with breakdown too long. Sending without breakdown.")
+                output_message = base_message # Fallback to message without breakdown
+
+            await self._send_message(ctx, output_message)
+            # --- End Format and Send Output ---
+
+        except Exception as e:
+            print(f"[ERROR][RtcaCmd] Unexpected error calculating RTCA for {ign}: {e}")
+            traceback.print_exc()
+            await self._send_message(ctx, f"An unexpected error occurred while calculating RTCA for '{target_ign}'.")
 
     # --- Cleanup ---
     async def close(self):
