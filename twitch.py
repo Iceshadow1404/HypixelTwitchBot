@@ -23,6 +23,7 @@ KUUDRA_TIER_POINTS = {'none': 1, 'hot': 2, 'burning': 3, 'fiery': 4, 'infernal':
 CLASS_NAMES = ['healer', 'mage', 'berserk', 'archer', 'tank']
 NUCLEUS_CRYSTALS = ['amber_crystal', 'topaz_crystal', 'amethyst_crystal', 'jade_crystal', 'sapphire_crystal']
 ESSENCE_TYPES = ['WITHER', 'DRAGON', 'DIAMOND', 'SPIDER', 'UNDEAD', 'GOLD', 'ICE', 'CRIMSON']
+SLAYER_BOSS_KEYS = ['zombie', 'spider', 'wolf', 'enderman', 'blaze', 'vampire']
 
 MAX_MESSAGE_LENGTH = 480 # Approx limit to avoid Twitch cutting messages
 
@@ -50,18 +51,19 @@ class Bot(commands.Bot):
                     'xp_table': data.get('leveling_xp', []),
                     'level_caps': data.get('leveling_caps', {}),
                     'catacombs_xp': data.get('catacombs', []),
-                    'hotm_brackets': data.get('HOTM', [])
+                    'hotm_brackets': data.get('HOTM', []),
+                    'slayer_xp': data.get('slayer_xp', {})
                 }
         except FileNotFoundError:
             print("[ERROR] leveling.json not found. Level calculations will fail.")
-            return {'xp_table': [], 'level_caps': {}, 'catacombs_xp': [], 'hotm_brackets': []}
+            return {'xp_table': [], 'level_caps': {}, 'catacombs_xp': [], 'hotm_brackets': [], 'slayer_xp': {}}
         except json.JSONDecodeError as e:
              print(f"[ERROR] Error decoding leveling.json: {e}. Level calculations will fail.")
-             return {'xp_table': [], 'level_caps': {}, 'catacombs_xp': [], 'hotm_brackets': []}
+             return {'xp_table': [], 'level_caps': {}, 'catacombs_xp': [], 'hotm_brackets': [], 'slayer_xp': {}}
         except Exception as e:
             print(f"[ERROR] Unexpected error loading leveling.json: {e}")
             traceback.print_exc()
-            return {'xp_table': [], 'level_caps': {}, 'catacombs_xp': [], 'hotm_brackets': []}
+            return {'xp_table': [], 'level_caps': {}, 'catacombs_xp': [], 'hotm_brackets': [], 'slayer_xp': {}}
 
     def _find_latest_profile(self, profiles: list, player_uuid: str) -> dict | None:
         """Finds the most recently played profile for a player from a list of profiles."""
@@ -444,6 +446,26 @@ class Bot(commands.Bot):
 
         # If loop completes, player is exactly level 50
         return float(level)
+
+    def calculate_slayer_level(self, xp: float, boss_key: str) -> int:
+        """Calculates the integer slayer level for a specific boss based on XP thresholds."""
+        if 'slayer_xp' not in self.leveling_data or boss_key not in self.leveling_data['slayer_xp']:
+            print(f"[WARN][Calc] Slayer XP thresholds not loaded for boss: {boss_key}")
+            return 0
+        
+        thresholds = self.leveling_data['slayer_xp'][boss_key]
+        max_level = len(thresholds) # Max level is length of thresholds list
+        level = 0
+
+        # Find the current level based on thresholds
+        for i in range(max_level):
+            if xp >= thresholds[i]:
+                level = i + 1 # Level is index + 1
+            else:
+                break # Stop checking once a threshold isn't met
+
+        # Return only the integer level
+        return level 
 
     def format_price(self, price: int | float) -> str:
         """Formats a price into a shorter form (e.g., 1.3m instead of 1,300,000)."""
@@ -1028,6 +1050,44 @@ class Bot(commands.Bot):
             print(f"[ERROR][PowderCmd] Unexpected error processing powder data: {e}")
             traceback.print_exc()
             await self._send_message(ctx, "An unexpected error occurred while fetching powder amounts.")
+
+    @commands.command(name='slayer')
+    async def slayer_command(self, ctx: commands.Context, *, ign: str | None = None):
+        """Shows the player's slayer levels."""
+        profile_data = await self._get_player_profile_data(ctx, ign)
+        if not profile_data:
+            return
+
+        target_ign, player_uuid, latest_profile = profile_data
+        profile_name = latest_profile.get('cute_name', 'Unknown')
+
+        try:
+            member_data = latest_profile.get('members', {}).get(player_uuid, {})
+            slayer_data = member_data.get('slayer', {}).get('slayer_bosses', {})
+
+            if not slayer_data:
+                print(f"[INFO][SlayerCmd] No slayer data found for {target_ign} in profile {profile_name}.")
+                await self._send_message(ctx, f"'{target_ign}' has no slayer data in profile '{profile_name}'.")
+                return
+
+            slayer_levels = []
+            for boss_key in SLAYER_BOSS_KEYS:
+                boss_data = slayer_data.get(boss_key, {})
+                xp = boss_data.get('xp', 0)
+                level = self.calculate_slayer_level(xp, boss_key)
+                # Capitalize boss name for display
+                display_name = boss_key.capitalize()
+                # Format with integer level and formatted XP
+                xp_str = self.format_price(xp) # Use format_price for consistency
+                slayer_levels.append(f"{display_name} {level} ({xp_str} XP)")
+
+            output_message = f"{target_ign}'s Slayers: { ' | '.join(slayer_levels) }"
+            await self._send_message(ctx, output_message)
+
+        except Exception as e:
+            print(f"[ERROR][SlayerCmd] Unexpected error processing slayer data: {e}")
+            traceback.print_exc()
+            await self._send_message(ctx, "An unexpected error occurred while fetching slayer levels.")
 
     @commands.command(name='networth', aliases=['nw'])
     async def networth_command(self, ctx: commands.Context, *, ign: str | None = None):
