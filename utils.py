@@ -114,9 +114,9 @@ async def _get_skyblock_data(hypixel_api_key, uuid: str) -> list | None:
                     # Save the full response for debugging
                     debug_file = f"hypixel_response_{uuid}.json"
                     try:
-                        """with open(debug_file, 'w', encoding='utf-8') as f:
+                        with open(debug_file, 'w', encoding='utf-8') as f:
                             json.dump(data, f, indent=4)
-                        print(f"[DEBUG][API] Hypixel response saved to '{debug_file}'.")"""
+                        print(f"[DEBUG][API] Hypixel response saved to '{debug_file}'.")
                     except IOError as io_err:
                          print(f"[WARN][API] Failed to save debug file '{debug_file}': {io_err}")
 

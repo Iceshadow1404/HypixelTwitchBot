@@ -723,40 +723,52 @@ class Bot(commands.Bot):
         Simulates runs considering 100% active XP / 25% passive XP.
         """
         print(f"[COMMAND] Rtca command triggered by {ctx.author.name}: {args}")
-        if not args:
-            await self._send_message(ctx, f"Usage: {self._prefix}rtca <username> [target_ca=50] [floor=m7]")
-            return
+        # Removed early return if not args
 
         # --- 1. Argument Parsing ---
-        parts = args.split()
-        ign = parts[0]
-        target_ca_str = '50' # Default target CA
-        floor_str = 'm7'   # Default floor
-        
-        try:
+        ign: str | None = None
+        target_ca_str: str = '50' # Default target CA
+        floor_str: str = 'm7'   # Default floor
+
+        if not args:
+            ign = ctx.author.name # Default to message author if no args provided
+            print(f"[DEBUG][RtcaCmd] No arguments provided, defaulting IGN to: {ign}")
+        else:
+            parts = args.split()
+            ign = parts[0] # First part is always IGN if args are provided
+            print(f"[DEBUG][RtcaCmd] Arguments provided, parsed IGN: {ign}")
+
+            # Only attempt to parse target_ca and floor if more than one part exists
             if len(parts) > 1:
                 target_ca_str = parts[1]
+                print(f"[DEBUG][RtcaCmd] Parsed target_ca_str: {target_ca_str}")
             if len(parts) > 2:
                 floor_str = parts[2].lower() # Normalize floor to lowercase
+                print(f"[DEBUG][RtcaCmd] Parsed floor_str: {floor_str}")
             if len(parts) > 3:
                  await self._send_message(ctx, f"Too many arguments. Usage: {self._prefix}rtca <username> [target_ca=50] [floor=m7]")
                  return
 
+        # --- Argument Validation (Moved here to run after potential defaulting) ---
+        try:
             # Validate target_ca
             target_ca_milestone = int(target_ca_str)
             if not 1 <= target_ca_milestone <= 50:
                 raise ValueError("Target CA must be between 1 and 50.")
+            print(f"[DEBUG][RtcaCmd] Validated target_ca_milestone: {target_ca_milestone}")
 
             # Validate floor
             if floor_str not in ['m6', 'm7']:
                  raise ValueError("Invalid floor. Please specify 'm6' or 'm7'.")
-                 
+            print(f"[DEBUG][RtcaCmd] Validated floor_str: {floor_str}")
+
         except ValueError as e:
             await self._send_message(ctx, f"Invalid argument: {e}. Usage: {self._prefix}rtca <username> [target_ca=50] [floor=m7]")
             return
-        # --- End Argument Parsing ---
+        # --- End Argument Parsing & Validation ---
 
         # --- 2. Fetch Player Data ---
+        # ign is guaranteed to be set here, either from default or parsing
         profile_data = await self._get_player_profile_data(ctx, ign)
         if not profile_data:
             return # Error message already sent by helper
@@ -769,6 +781,11 @@ class Bot(commands.Bot):
             member_data = latest_profile.get('members', {}).get(player_uuid, {})
             dungeons_data = member_data.get('dungeons', {})
             player_classes_data = dungeons_data.get('player_classes', None)
+            # --- Fetch Selected Class --- (Moved extraction here)
+            selected_class = dungeons_data.get('selected_dungeon_class')
+            selected_class_lower = selected_class.lower() if selected_class else None # Lowercase for comparison
+            print(f"[DEBUG][RtcaCmd] Fetched selected class: {selected_class}")
+            # -----------------------------
 
             if player_classes_data is None:
                  print(f"[INFO][RtcaCmd] No player_classes data found for {target_ign} in profile {profile_name}.")
@@ -894,7 +911,25 @@ class Bot(commands.Bot):
             # --- End Run Simulation ---
 
             # --- 7. Format and Send Output ---
-            breakdown_parts = [f"{cn.capitalize()}: {count}" for cn, count in active_runs_per_class.items() if count > 0]
+            # Prepare items for sorting (only those with > 0 runs)
+            items_to_sort = [(cn, count) for cn, count in active_runs_per_class.items() if count > 0]
+
+            # Sort: selected class first, then by descending run count
+            sorted_items = sorted(
+                items_to_sort,
+                key=lambda item: (item[0].lower() != selected_class_lower, -item[1])
+                # Explanation:
+                # - item[0].lower() != selected_class_lower:
+                #   This is False (sorts first) if item[0] IS the selected class.
+                #   This is True (sorts later) if item[0] is NOT the selected class.
+                # - -item[1]: Sorts by run count descending (negated for ascending sort on negative numbers)
+            )
+
+            # Build the breakdown string from sorted items
+            breakdown_parts = [
+                f"{'🔸 ' if cn.lower() == selected_class_lower else ''}{cn.capitalize()}: {count}" 
+                for cn, count in sorted_items
+            ]
             breakdown_str = " | ".join(breakdown_parts) if breakdown_parts else ""
 
             base_message = (
@@ -902,9 +937,9 @@ class Bot(commands.Bot):
                 f"{target_ign} (CA {current_ca:.2f}) -> Target CA {target_ca_milestone}: "
                 f"Needs approx {total_runs_simulated:,} {selected_floor_name} runs "
             )
-            
+
             output_message = base_message + breakdown_str
-            
+
             # Check length and potentially remove breakdown if too long
             if len(output_message) > constants.MAX_MESSAGE_LENGTH:
                 print("[WARN][RtcaCmd] Output message with breakdown too long. Sending without breakdown.")
