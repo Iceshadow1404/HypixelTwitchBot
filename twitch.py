@@ -1,7 +1,6 @@
 # twitch.py
 import asyncio
 import json
-import os
 import traceback
 from datetime import datetime
 import math
@@ -10,27 +9,12 @@ import re
 import aiohttp
 from twitchio.ext import commands
 
-# --- Constants ---
-MOJANG_API_URL = "https://mowojang.matdoes.dev/{username}"
-HYPIXEL_API_URL = "https://api.hypixel.net/v2/skyblock/profiles"
-HYPIXEL_AUCTION_URL = "https://api.hypixel.net/v2/skyblock/auction"
-HYPIXEL_ELECTION_URL = "https://api.hypixel.net/v2/resources/skyblock/election"
+import constants
+import utils
+from calculations import _get_xp_for_target_level, calculate_hotm_level, \
+    calculate_average_skill_level, calculate_dungeon_level, calculate_class_level, calculate_slayer_level, format_price
+from utils import _find_latest_profile, _get_uuid_from_ign, _get_skyblock_data
 
-AVERAGE_SKILLS_LIST = [
-    'farming', 'mining', 'combat', 'foraging', 'fishing',
-    'enchanting', 'alchemy', 'taming', 'carpentry'
-]
-KUUDRA_TIERS_ORDER = ['none', 'hot', 'burning', 'fiery', 'infernal']
-KUUDRA_TIER_POINTS = {'none': 1, 'hot': 2, 'burning': 3, 'fiery': 4, 'infernal': 5}
-CLASS_NAMES = ['healer', 'mage', 'berserk', 'archer', 'tank']
-NUCLEUS_CRYSTALS = ['amber_crystal', 'topaz_crystal', 'amethyst_crystal', 'jade_crystal', 'sapphire_crystal']
-ESSENCE_TYPES = ['WITHER', 'DRAGON', 'DIAMOND', 'SPIDER', 'UNDEAD', 'GOLD', 'ICE', 'CRIMSON']
-SLAYER_BOSS_KEYS = ['zombie', 'spider', 'wolf', 'enderman', 'blaze', 'vampire']
-BASE_M6_CLASS_XP = 105000 # From runs-to-class-average.ts
-BASE_M7_CLASS_XP = 340000 # From runs-to-class-average.ts
-PAUL_MULTIPLIER = 1.0 # Paul perk not considered
-
-MAX_MESSAGE_LENGTH = 480 # Approx limit to avoid Twitch cutting messages
 
 class Bot(commands.Bot):
     """
@@ -40,152 +24,12 @@ class Bot(commands.Bot):
         """Initializes the Bot."""
         self.start_time = datetime.now()
         self.hypixel_api_key = hypixel_api_key
-        self.leveling_data = self._load_leveling_data()
+        self.leveling_data = utils._load_leveling_data()
 
         super().__init__(token=token, prefix=prefix, nick=nickname, initial_channels=initial_channels)
         print(f"[INFO] Bot initialized for channels: {initial_channels}")
 
     # --- Helper Methods ---
-
-    def _load_leveling_data(self) -> dict:
-        """Loads leveling data from leveling.json."""
-        try:
-            with open('leveling.json', 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                return {
-                    'xp_table': data.get('leveling_xp', []),
-                    'level_caps': data.get('leveling_caps', {}),
-                    'catacombs_xp': data.get('catacombs', []),
-                    'hotm_brackets': data.get('HOTM', []),
-                    'slayer_xp': data.get('slayer_xp', {})
-                }
-        except FileNotFoundError:
-            print("[ERROR] leveling.json not found. Level calculations will fail.")
-            return {'xp_table': [], 'level_caps': {}, 'catacombs_xp': [], 'hotm_brackets': [], 'slayer_xp': {}}
-        except json.JSONDecodeError as e:
-             print(f"[ERROR] Error decoding leveling.json: {e}. Level calculations will fail.")
-             return {'xp_table': [], 'level_caps': {}, 'catacombs_xp': [], 'hotm_brackets': [], 'slayer_xp': {}}
-        except Exception as e:
-            print(f"[ERROR] Unexpected error loading leveling.json: {e}")
-            traceback.print_exc()
-            return {'xp_table': [], 'level_caps': {}, 'catacombs_xp': [], 'hotm_brackets': [], 'slayer_xp': {}}
-
-    def _find_latest_profile(self, profiles: list, player_uuid: str) -> dict | None:
-        """Finds the most recently played profile for a player from a list of profiles."""
-        print(f"[DEBUG][Profile] Searching profile for UUID {player_uuid} from {len(profiles)} profiles.")
-        if not profiles:
-            print("[DEBUG][Profile] No profiles to search.")
-            return None
-
-        # Check for 'selected' profile first
-        for profile in profiles:
-            cute_name = profile.get('cute_name', 'Unknown')
-            if profile.get('selected', False) and player_uuid in profile.get('members', {}):
-                print(f"[DEBUG][Profile] Found selected profile: '{cute_name}'")
-                return profile
-
-        # If no 'selected' profile, find the one with the latest 'last_save' for the member
-        latest_profile = None
-        latest_save = 0
-        for profile in profiles:
-            cute_name = profile.get('cute_name', 'Unknown')
-            member_data = profile.get('members', {}).get(player_uuid)
-            if member_data:
-                last_save = member_data.get('last_save', 0)
-                if last_save > latest_save:
-                    latest_save = last_save
-                    latest_profile = profile
-                    print(f"[DEBUG][Profile] Found newer profile: '{cute_name}' (Last Save: {last_save})")
-
-        if latest_profile:
-            print(f"[DEBUG][Profile] Latest profile selected: '{latest_profile.get('cute_name')}'")
-            return latest_profile
-
-        print(f"[DEBUG][Profile] No suitable profile found for UUID {player_uuid}.")
-        return None
-
-    async def _get_uuid_from_ign(self, username: str) -> str | None:
-        """Gets the Minecraft UUID for a given username using Mojang API."""
-        url = MOJANG_API_URL.format(username=username)
-        print(f"[DEBUG][API] Mojang request for '{username}'...")
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        uuid = data.get('id')
-                        if not uuid:
-                            print(f"[WARN][API] Mojang API: No UUID found for '{username}'.")
-                            # Return None if UUID is not found, even if status is 200
-                            return None 
-                        return uuid # Return UUID if found
-                    elif response.status == 204: # No content -> User not found
-                        print(f"[WARN][API] Mojang API: Username '{username}' not found.")
-                        return None
-                    else:
-                        print(f"[ERROR][API] Mojang API error: Status {response.status}")
-                        return None
-        except aiohttp.ClientError as e:
-            print(f"[ERROR][API] Network error during Mojang API request: {e}")
-            return None
-        except Exception as e:
-            print(f"[ERROR][API] Unexpected error during Mojang API request: {e}")
-            traceback.print_exc()
-            return None
-
-    async def _get_skyblock_data(self, uuid: str) -> list | None:
-        """Gets SkyBlock profile data for a given UUID using Hypixel API."""
-        if not self.hypixel_api_key:
-            print("[ERROR][API] Hypixel API Key not configured.")
-            return None
-
-        params = {"key": self.hypixel_api_key, "uuid": uuid}
-        print(f"[DEBUG][API] Hypixel profiles request for UUID '{uuid}'...")
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(HYPIXEL_API_URL, params=params) as response:
-                    print(f"[DEBUG][API] Hypixel profiles response status: {response.status}")
-                    response_text = await response.text() # Read text first for debugging
-                if response.status == 200:
-                    try:
-                        data = json.loads(response_text)
-                        # Save the full response for debugging
-                        debug_file = f"hypixel_response_{uuid}.json"
-                        try:
-                            """with open(debug_file, 'w', encoding='utf-8') as f:
-                                json.dump(data, f, indent=4)
-                            print(f"[DEBUG][API] Hypixel response saved to '{debug_file}'.")"""
-                        except IOError as io_err:
-                             print(f"[WARN][API] Failed to save debug file '{debug_file}': {io_err}")
-
-                        if data.get("success"):
-                            profiles = data.get('profiles')
-                            if profiles is None:
-                                     print(f"[WARN][API] Hypixel API success, but 'profiles' field is missing or null for {uuid}.")
-                                     return [] # Return empty list instead of None if success=true but no profiles
-                            if not isinstance(profiles, list):
-                                print(f"[ERROR][API] Hypixel API success, but 'profiles' is not a list ({type(profiles)}).")
-                                return None
-                            return profiles
-                        else:
-                            reason = data.get('cause', 'Unknown reason')
-                            print(f"[ERROR][API] Hypixel API request failed: {reason}")
-                            return None
-                    except json.JSONDecodeError as json_e:
-                        print(f"[ERROR][API] Error decoding Hypixel JSON response: {json_e}")
-                        print(f"--- Response Text Start ---\n{response_text}\n--- Response Text End ---")
-                        return None
-                else:
-                    print(f"[ERROR][API] Hypixel API request failed: Status {response.status}")
-                    print(f"--- Response Text Start ---\n{response_text}\n--- Response Text End ---")
-                    return None
-        except aiohttp.ClientError as e:
-            print(f"[ERROR][API] Network error during Hypixel API request: {e}")
-            return None
-        except Exception as e:
-            print(f"[ERROR][API] Unexpected error during Hypixel API request: {e}")
-            traceback.print_exc()
-            return None
 
     async def _get_player_profile_data(self, ctx: commands.Context, ign: str | None) -> tuple[str, str, dict] | None:
         """
@@ -202,15 +46,15 @@ class Bot(commands.Bot):
         target_ign = ign if ign else ctx.author.name
         target_ign = target_ign.lstrip('@')
         # Use direct ctx.send for initial feedback message
-        await ctx.send(f"Searching data for '{target_ign}'...")
+        #await ctx.send(f"Searching data for '{target_ign}'...")
 
-        player_uuid = await self._get_uuid_from_ign(target_ign)
+        player_uuid = await _get_uuid_from_ign(target_ign)
         if not player_uuid:
             # Use _send_message for this potentially delayed error message
             await self._send_message(ctx, f"Could not find Minecraft account for '{target_ign}'. Please check the username.")
             return None
 
-        profiles = await self._get_skyblock_data(player_uuid)
+        profiles = await _get_skyblock_data(self.hypixel_api_key, player_uuid)
         if profiles is None: # API error occurred
             # Use _send_message for this potentially delayed error message
             await self._send_message(ctx, f"Could not fetch SkyBlock profiles for '{target_ign}'. An API error occurred.")
@@ -220,328 +64,13 @@ class Bot(commands.Bot):
             await self._send_message(ctx, f"'{target_ign}' seems to have no SkyBlock profiles yet.")
             return None
 
-        latest_profile = self._find_latest_profile(profiles, player_uuid)
+        latest_profile = _find_latest_profile(profiles, player_uuid)
         if not latest_profile:
             # Use _send_message for this potentially delayed error message
             await self._send_message(ctx, f"Could not find an active profile for '{target_ign}'. Player must be a member of at least one profile.")
             return None
 
         return target_ign, player_uuid, latest_profile
-
-    # Add the missing helper function here
-    def _get_xp_for_target_level(self, target_level: int) -> float:
-        """Calculates the total cumulative XP required to COMPLETE a target level.
-        Uses the Catacombs XP table.
-        Target level is 1-based (e.g., target_level=50 means completing level 50).
-        """
-        if not self.leveling_data['catacombs_xp']:
-            print("[WARN][Calc] Catacombs XP table not loaded for _get_xp_for_target_level.")
-            return float('inf') # Return infinity if data is missing
-            
-        xp_table = self.leveling_data['catacombs_xp']
-        target_level_index = target_level - 1 # Convert 1-based level to 0-based index
-        
-        if target_level_index < 0:
-            return 0.0 # Cannot complete level 0 or less
-
-        # Ensure index doesn't go out of bounds for slicing
-        max_index = len(xp_table)
-        if target_level_index >= max_index:
-             print(f"[WARN][Calc] Target level {target_level} exceeds Catacombs XP table length ({len(xp_table)}). Using XP for max level.")
-             # Sum the entire table if target level is beyond max level
-             total_xp = sum(xp_table)
-             return float(total_xp)
-
-        # Sum XP required for levels 1 through target_level (indices 0 through target_level_index)
-        # Slicing [:index+1] goes up to and includes the index.
-        total_xp = sum(xp_table[:target_level_index + 1]) 
-        print(f"[DEBUG][Calc] XP to complete Level {target_level} (sum index 0 to {target_level_index}): {total_xp:,.0f}") # Added debug
-        return float(total_xp)
-
-    # --- Calculation Methods ---
-
-    def calculate_skill_level(self, xp: float, skill_name: str, member_data: dict | None = None) -> float:
-        """Calculates the level of a skill based on XP, considering level caps and special skills."""
-        if not self.leveling_data['xp_table']:
-            return 0.0
-
-        # Determine base max level (usually 50 or 60)
-        base_max_level = self.leveling_data['level_caps'].get(skill_name, 50)
-        xp_table_to_use = self.leveling_data['xp_table'] # Use standard XP table
-
-        # Calculate effective max level considering special rules
-        effective_max_level = base_max_level
-        if skill_name == 'taming' and member_data:
-            pets_data = member_data.get('pets_data', {}).get('pet_care', {})
-            sacrificed_count = len(pets_data.get('pet_types_sacrificed', []))
-            effective_max_level = 50 + min(sacrificed_count, 10) # Cap bonus at +10
-        elif skill_name == 'farming' and member_data:
-            jacobs_perks = member_data.get('jacobs_contest', {}).get('perks', {})
-            farming_level_cap_bonus = jacobs_perks.get('farming_level_cap', 0)
-            effective_max_level = 50 + farming_level_cap_bonus
-
-        # Calculate total XP required for the effective max level
-        total_xp_for_max = sum(xp_table_to_use[:effective_max_level]) # Sum only up to the effective cap
-
-        # If XP meets or exceeds the requirement for the max level, return max level
-        if xp >= total_xp_for_max:
-            return float(effective_max_level)
-
-        # Find level based on XP progression
-        total_xp_required = 0
-        level = 0
-        # Iterate only up to the XP required for levels below the effective max
-        for i, required_xp in enumerate(xp_table_to_use):
-            if i >= effective_max_level: # Stop if we exceed the effective max level index
-                 break
-            total_xp_required += required_xp
-            if xp >= total_xp_required:
-                level += 1
-            else:
-                # Calculate progress towards the next level
-                current_level_xp = total_xp_required - required_xp
-                next_level_xp_needed = required_xp
-                if next_level_xp_needed > 0:
-                    progress = (xp - current_level_xp) / next_level_xp_needed
-                    # Ensure progress doesn't make level exceed effective max
-                    calculated_level = level + progress
-                    return min(calculated_level, float(effective_max_level))
-                else: # Avoid division by zero if xp table is malformed
-                    return min(float(level), float(effective_max_level))
-
-        # If loop finishes, player is exactly max level or below
-        return min(float(level), float(effective_max_level))
-
-    def calculate_hotm_level(self, xp: float) -> float:
-        """Calculates the Heart of the Mountain level based on cumulative XP per level.
-        Assumes 'hotm_brackets' in leveling_data contains XP needed for each level.
-        """
-        # print(f"\n[DEBUG][Calc][HotM] Calculating HotM Level for XP: {xp:,.0f}") # Start Calculation Log (Removed)
-        if 'hotm_brackets' not in self.leveling_data or not self.leveling_data['hotm_brackets']:
-            print("[WARN][Calc][HotM] HOTM XP requirements (hotm_brackets) not loaded.")
-            return 0.0
-        
-        xp_per_level = self.leveling_data['hotm_brackets']
-        max_level = len(xp_per_level) # Max level is determined by the length of the list
-        # print(f"[DEBUG][Calc][HotM] Max Level (based on brackets): {max_level}") # Removed
-        
-        # Calculate total XP needed for max level
-        total_xp_for_max = sum(xp_per_level)
-        # print(f"[DEBUG][Calc][HotM] Total XP for Max Level: {total_xp_for_max:,.0f}") # Removed
-
-        if xp >= total_xp_for_max:
-            # print(f"[DEBUG][Calc][HotM] XP >= Total XP for Max. Returning Max Level: {max_level}") # Removed
-            return float(max_level)
-
-        # Find level based on cumulative XP progression
-        total_xp_required = 0
-        level = 0
-        # print("[DEBUG][Calc][HotM] --- Iterating through levels ---") # Removed
-        for i, required_xp in enumerate(xp_per_level):
-            current_level_xp_threshold = total_xp_required # XP needed to START this level (cumulative sum BEFORE adding current level)
-            # level_num_being_checked = i + 1 # Current level number (1-based)
-            # print(f"[DEBUG][Calc][HotM] Checking Level {level_num_being_checked}: Needs {required_xp:,.0f} XP. Total XP needed to finish: {total_xp_required + required_xp:,.0f}") # Removed
-            
-            total_xp_required += required_xp # XP needed to FINISH this level (cumulative sum AFTER adding current level)
-
-            if xp >= total_xp_required:
-                level += 1
-                # print(f"[DEBUG][Calc][HotM] -> Level {level_num_being_checked} COMPLETED. Current full level: {level}") # Removed
-            else:
-                # print(f"[DEBUG][Calc][HotM] -> Level {level_num_being_checked} NOT completed. Calculating progress...") # Removed
-                # Calculate progress within the current level
-                xp_in_level = xp - current_level_xp_threshold
-                xp_needed_for_level = required_xp # This is the amount for the current level (i)
-                # print(f"[DEBUG][Calc][HotM]    XP Threshold for this level: {current_level_xp_threshold:,.0f}") # Removed
-                # print(f"[DEBUG][Calc][HotM]    XP into this level: {xp_in_level:,.0f}") # Removed
-                # print(f"[DEBUG][Calc][HotM]    XP needed for this level: {xp_needed_for_level:,.0f}") # Removed
-                if xp_needed_for_level > 0:
-                    progress = xp_in_level / xp_needed_for_level
-                    final_level = level + progress
-                    # print(f"[DEBUG][Calc][HotM]    Progress: {progress:.4f}") # Removed
-                    # print(f"[DEBUG][Calc][HotM]    Final Calculated Level: {final_level:.4f}") # Removed
-                    return final_level 
-                else: # Avoid division by zero
-                    # print(f"[DEBUG][Calc][HotM]    XP needed for level is 0. Returning integer level: {level}") # Removed
-                    return float(level)
-
-        # If loop completes, player has exactly reached a level threshold
-        # print(f"[DEBUG][Calc][HotM] Loop completed. Returning integer level: {level}") # Removed
-        return float(level)
-
-    def calculate_average_skill_level(self, profile: dict, player_uuid: str) -> float | None:
-        """Calculates the average skill level, excluding cosmetics like Carpentry and Runecrafting if desired."""
-        print(f"[DEBUG][Calc] Calculating Skill Average for profile {profile.get('profile_id', 'UNKNOWN')}")
-        member_data = profile.get('members', {}).get(player_uuid)
-        if not member_data:
-            print(f"[WARN][Calc] Member data not found for {player_uuid} in profile.")
-            return None
-
-        experience_data = member_data.get('player_data', {}).get('experience', {})
-        total_level_estimate = 0
-        skills_counted = 0
-
-        print("\n[DEBUG][Calc] Skill Levels:")
-        print("-" * 40)
-
-        for skill_name in AVERAGE_SKILLS_LIST: # Use the predefined list
-            xp_field = f'SKILL_{skill_name.upper()}'
-            skill_xp = experience_data.get(xp_field)
-
-            if skill_xp is not None:
-                level = self.calculate_skill_level(skill_xp, skill_name, member_data)
-                total_level_estimate += level
-                skills_counted += 1
-                print(f"{skill_name.capitalize():<11}: {level:>5.2f} (XP: {skill_xp:,.0f})")
-            else:
-                # Still count skill as 0 if API doesn't provide XP (e.g., new skill)
-                total_level_estimate += 0
-                skills_counted += 1
-                print(f"{skill_name.capitalize():<11}: {0.00:>5.2f} (XP: Not Available)")
-
-        print("-" * 40)
-
-        if skills_counted > 0:
-            average = total_level_estimate / skills_counted
-            print(f"[DEBUG][Calc] Skill Average calculated: {average:.4f}")
-            return average
-        else:
-            print("[WARN][Calc] No skills counted for average calculation.")
-            return 0.0
-
-    def calculate_dungeon_level(self, xp: float) -> float:
-        """Calculates the Catacombs level based on XP, including progress as decimal points."""
-        if not self.leveling_data['catacombs_xp']:
-            print("[WARN][Calc] Catacombs XP table not loaded.")
-            return 0.0
-
-        max_level = 100  # Catacombs max level
-        xp_table = self.leveling_data['catacombs_xp']
-
-        # Calculate total XP for max level (sum all entries)
-        total_xp_for_max = sum(xp_table)
-
-        if xp >= total_xp_for_max:
-            return float(max_level)
-
-        total_xp_required = 0
-        level = 0
-        for i, required_xp in enumerate(xp_table):
-            if i >= max_level: # Should not happen if xp_table has 100 entries, but safety check
-                break
-            current_level_xp_threshold = total_xp_required
-            total_xp_required += required_xp
-
-            if xp >= total_xp_required:
-                level += 1
-            else:
-                # Calculate progress within the current level
-                xp_in_level = xp - current_level_xp_threshold
-                xp_needed_for_level = required_xp
-                if xp_needed_for_level > 0:
-                    progress = xp_in_level / xp_needed_for_level
-                    return level + progress
-                else: # Avoid division by zero
-                    return float(level)
-
-        # If loop completes, player is exactly level 100 (or table is shorter than 100)
-        return float(level)
-
-    def calculate_class_level(self, xp: float) -> float:
-        """Calculates the class level based on XP using the Catacombs XP table up to level 50."""
-        if not self.leveling_data['catacombs_xp']:
-            print("[WARN][Calc] Catacombs XP table not loaded for class calculation.")
-            return 0.0
-
-        max_class_level = 50
-        # Use only the first 50 entries from the Catacombs XP table for class levels
-        xp_table = self.leveling_data['catacombs_xp'][:max_class_level]
-
-        total_xp_for_max_class_level = sum(xp_table)
-
-        if xp >= total_xp_for_max_class_level:
-            return float(max_class_level)
-
-        total_xp_required = 0
-        level = 0
-        for i, required_xp in enumerate(xp_table):
-            # No need to check i >= max_class_level due to slicing xp_table
-            current_level_xp_threshold = total_xp_required
-            total_xp_required += required_xp
-
-            if xp >= total_xp_required:
-                level += 1
-            else:
-                xp_in_level = xp - current_level_xp_threshold
-                xp_needed_for_level = required_xp
-                if xp_needed_for_level > 0:
-                    progress = xp_in_level / xp_needed_for_level
-                    return level + progress
-                else:
-                    return float(level)
-
-        # If loop completes, player is exactly level 50
-        return float(level)
-
-    def calculate_slayer_level(self, xp: float, boss_key: str) -> int:
-        """Calculates the integer slayer level for a specific boss based on XP thresholds."""
-        if 'slayer_xp' not in self.leveling_data or boss_key not in self.leveling_data['slayer_xp']:
-            print(f"[WARN][Calc] Slayer XP thresholds not loaded for boss: {boss_key}")
-            return 0
-        
-        thresholds = self.leveling_data['slayer_xp'][boss_key]
-        max_level = len(thresholds) # Max level is length of thresholds list
-        level = 0
-
-        # Find the current level based on thresholds
-        for i in range(max_level):
-            if xp >= thresholds[i]:
-                level = i + 1 # Level is index + 1
-            else:
-                break # Stop checking once a threshold isn't met
-
-        # Return only the integer level
-        return level 
-
-    def format_price(self, price: int | float) -> str:
-        """Formats a price into a shorter form (e.g., 1.3m instead of 1,300,000)."""
-        price = float(price) # Ensure float for division
-        if price >= 1_000_000_000:
-            return f"{price / 1_000_000_000:.1f}b"
-        elif price >= 1_000_000:
-            return f"{price / 1_000_000:.1f}m"
-        elif price >= 1_000:
-            return f"{price / 1_000:.1f}k"
-        else:
-            return f"{price:.0f}" # Display small numbers as integers
-
-    async def _send_message(self, ctx: commands.Context, message: str):
-        """Helper function to send messages, incorporating workarounds for potential issues."""
-        print(f"[DEBUG][Send] Attempting to send to #{ctx.channel.name}: {message[:100]}...") # Log first 100 chars
-        try:
-            # --- WORKAROUND: Small delay before sending ---
-            # May help with potential silent rate limits or timing issues after await calls.
-            await asyncio.sleep(0.3)
-            # ---------------------------------------------
-
-            # --- WORKAROUND: Re-fetch channel object ---
-            # May help if the context's channel object state becomes inconsistent after awaits.
-            channel_name = ctx.channel.name
-            channel = self.get_channel(channel_name)
-            if channel:
-                print(f"[DEBUG][Send] Re-fetched channel object for {channel_name}. Sending via channel object.")
-                await channel.send(message)
-                print(f"[DEBUG][Send] Successfully sent message via channel object to #{channel_name}.")
-            else:
-                # Fallback if channel couldn't be re-fetched (should not happen if connected)
-                print(f"[WARN][Send] Could not re-fetch channel object for {channel_name}. Falling back to ctx.send().")
-                await ctx.send(message)
-                print(f"[DEBUG][Send] Successfully sent message via ctx.send() to #{channel_name}.")
-            # -----------------------------------------
-
-        except Exception as send_e:
-            print(f"[ERROR][Send] FAILED to send message to #{ctx.channel.name}: {send_e}")
-            traceback.print_exc()
 
     # --- Bot Events ---
 
@@ -588,14 +117,35 @@ class Bot(commands.Bot):
         # Process commands defined in this class
         await self.handle_commands(message)
 
+    async def _send_message(self, ctx: commands.Context, message: str):
+        """Helper function to send messages, incorporating workarounds for potential issues."""
+        print(f"[DEBUG][Send] Attempting to send to #{ctx.channel.name}: {message[:100]}...") # Log first 100 chars
+        try:
+            # --- WORKAROUND: Small delay before sending ---
+            # May help with potential silent rate limits or timing issues after await calls.
+            await asyncio.sleep(0.3)
+            # ---------------------------------------------
+
+            # --- WORKAROUND: Re-fetch channel object ---
+            # May help if the context's channel object state becomes inconsistent after awaits.
+            channel_name = ctx.channel.name
+            channel = self.get_channel(channel_name)
+            if channel:
+                print(f"[DEBUG][Send] Re-fetched channel object for {channel_name}. Sending via channel object.")
+                await channel.send(message)
+                print(f"[DEBUG][Send] Successfully sent message via channel object to #{channel_name}.")
+            else:
+                # Fallback if channel couldn't be re-fetched (should not happen if connected)
+                print(f"[WARN][Send] Could not re-fetch channel object for {channel_name}. Falling back to ctx.send().")
+                await ctx.send(message)
+                print(f"[DEBUG][Send] Successfully sent message via ctx.send() to #{channel_name}.")
+            # -----------------------------------------
+
+        except Exception as send_e:
+            print(f"[ERROR][Send] FAILED to send message to #{ctx.channel.name}: {send_e}")
+            traceback.print_exc()
 
     # --- Commands ---
-
-    @commands.command(name='ping')
-    async def ping_command(self, ctx: commands.Context):
-        """Responds with pong."""
-        print(f"[COMMAND] Ping command received from {ctx.author.name} in #{ctx.channel.name}")
-        await self._send_message(ctx, f'pong, {ctx.author.name}!')
 
     @commands.command(name='skills')
     async def skills_command(self, ctx: commands.Context, *, ign: str | None = None):
@@ -608,7 +158,7 @@ class Bot(commands.Bot):
         profile_name = latest_profile.get('cute_name', 'Unknown')
 
         try:
-            average_level = self.calculate_average_skill_level(latest_profile, player_uuid)
+            average_level = calculate_average_skill_level(self.leveling_data, latest_profile, player_uuid)
             if average_level is not None:
                 await self._send_message(ctx, f"{target_ign}'s Skill Average in profile '{profile_name}' is approximately {average_level:.2f}.")
             else:
@@ -649,11 +199,11 @@ class Bot(commands.Bot):
             # Format output
             completions = []
             total_score = 0
-            for tier in KUUDRA_TIERS_ORDER:
+            for tier in constants.KUUDRA_TIERS_ORDER:
                 count = kuudra_completed_tiers.get(tier, 0)
                 tier_name = 'basic' if tier == 'none' else tier # Rename 'none' to 'basic'
                 completions.append(f"{tier_name} {count}")
-                total_score += count * KUUDRA_TIER_POINTS.get(tier, 0) # Use .get for safety
+                total_score += count * constants.KUUDRA_TIER_POINTS.get(tier, 0) # Use .get for safety
 
             await self._send_message(ctx, f"{target_ign}'s Kuudra completions in profile '{profile_name}': {', '.join(completions)} | Score: {total_score:,}")
 
@@ -674,13 +224,13 @@ class Bot(commands.Bot):
         await ctx.send(f"Searching active auctions for '{target_ign}'...")
 
         try:
-            player_uuid = await self._get_uuid_from_ign(target_ign)
+            player_uuid = await _get_uuid_from_ign(target_ign)
             if not player_uuid:
                 await ctx.send(f"Could not find Minecraft account for '{target_ign}'.")
                 return
 
             # --- Fetch Auction Data ---
-            url = HYPIXEL_AUCTION_URL
+            url = constants.HYPIXEL_AUCTION_URL
             params = {"key": self.hypixel_api_key, "player": player_uuid}
             print(f"[DEBUG][API] Hypixel Auctions request for UUID '{player_uuid}'...")
             auctions = []
@@ -731,12 +281,12 @@ class Bot(commands.Bot):
                 if highest_bid == 0:
                     highest_bid = auction.get('starting_bid', 0)
 
-                price_str = self.format_price(highest_bid)
+                price_str = format_price(highest_bid)
                 auction_str = f"{item_name} {price_str}"
 
                 # Check if adding the next item exceeds the limit
                 separator = " | " if auction_list_parts else ""
-                if len(current_message) + len(separator) + len(auction_str) <= MAX_MESSAGE_LENGTH:
+                if len(current_message) + len(separator) + len(auction_str) <= constants.MAX_MESSAGE_LENGTH:
                     auction_list_parts.append(auction_str)
                     current_message += separator + auction_str
                     shown_items_count += 1
@@ -754,7 +304,7 @@ class Bot(commands.Bot):
             if hidden_items > 0:
                 suffix = f" (+{hidden_items} more)"
                 # Check if suffix fits, otherwise omit it
-                if len(final_message) + len(suffix) <= MAX_MESSAGE_LENGTH:
+                if len(final_message) + len(suffix) <= constants.MAX_MESSAGE_LENGTH:
                      final_message += suffix
 
             await self._send_message(ctx, final_message)
@@ -779,7 +329,7 @@ class Bot(commands.Bot):
             dungeons_data = member_data.get('dungeons', {}).get('dungeon_types', {}).get('catacombs', {})
             catacombs_xp = dungeons_data.get('experience', 0)
 
-            level = self.calculate_dungeon_level(catacombs_xp)
+            level = calculate_dungeon_level(self.leveling_data, catacombs_xp)
             await self._send_message(ctx, f"{target_ign}'s Catacombs level in profile '{profile_name}' is {level:.2f} (XP: {catacombs_xp:,.0f})")
 
         except Exception as e:
@@ -837,9 +387,9 @@ class Bot(commands.Bot):
             total_level = 0.0
             valid_classes_counted = 0
 
-            for class_name in CLASS_NAMES:
+            for class_name in constants.CLASS_NAMES:
                 class_xp = player_classes_data.get(class_name, {}).get('experience', 0)
-                level = self.calculate_class_level(class_xp)
+                level = calculate_class_level(self.leveling_data, class_xp)
                 class_levels[class_name.capitalize()] = level
                 total_level += level
                 valid_classes_counted += 1 # Count even if level is 0
@@ -866,12 +416,12 @@ class Bot(commands.Bot):
             await ctx.send("Hypixel API Key is not configured.")
             return
 
-        print(f"[DEBUG][API] Fetching SkyBlock election data from {HYPIXEL_ELECTION_URL}")
+        print(f"[DEBUG][API] Fetching SkyBlock election data from {constants.HYPIXEL_ELECTION_URL}")
         await ctx.send("Fetching current SkyBlock Mayor...")
 
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(HYPIXEL_ELECTION_URL) as response:
+                async with session.get(constants.HYPIXEL_ELECTION_URL) as response:
                     if response.status == 200:
                         data = await response.json()
                         if data.get("success"):
@@ -966,7 +516,7 @@ class Bot(commands.Bot):
 
             sum_total_placed = 0
             print(f"[DEBUG][NucleusCmd] Calculating for {target_ign} ({profile_name}):")
-            for crystal_key in NUCLEUS_CRYSTALS:
+            for crystal_key in constants.NUCLEUS_CRYSTALS:
                 crystal_info = crystals_data.get(crystal_key, {})
                 total_placed = crystal_info.get('total_placed', 0)
                 sum_total_placed += total_placed
@@ -998,7 +548,7 @@ class Bot(commands.Bot):
             mining_core_data = member_data.get('mining_core', {})
             hotm_xp = mining_core_data.get('experience', 0.0)
 
-            level = self.calculate_hotm_level(hotm_xp)
+            level = calculate_hotm_level(self.leveling_data, hotm_xp)
             await self._send_message(ctx, f"{target_ign}'s HotM level is {level:.2f} (XP: {hotm_xp:,.0f})")
 
         except Exception as e:
@@ -1028,7 +578,7 @@ class Bot(commands.Bot):
                 return
 
             essence_amounts = []
-            for essence_type in ESSENCE_TYPES:
+            for essence_type in constants.ESSENCE_TYPES:
                 # Access the specific essence type's dictionary
                 essence_type_data = all_essence_data.get(essence_type, {})
                 # Get the 'current' amount from within that dictionary
@@ -1036,7 +586,7 @@ class Bot(commands.Bot):
 
                 # Use capitalized full name
                 display_name = essence_type.capitalize() 
-                amount_str = self.format_price(amount)
+                amount_str = format_price(amount)
                 essence_amounts.append(f"{display_name}: {amount_str}")
 
             output_message = f"{target_ign}: { ' | '.join(essence_amounts) }"
@@ -1107,14 +657,14 @@ class Bot(commands.Bot):
                 return
 
             slayer_levels = []
-            for boss_key in SLAYER_BOSS_KEYS:
+            for boss_key in constants.SLAYER_BOSS_KEYS:
                 boss_data = slayer_data.get(boss_key, {})
                 xp = boss_data.get('xp', 0)
-                level = self.calculate_slayer_level(xp, boss_key)
+                level = calculate_slayer_level(self.leveling_data, xp, boss_key)
                 # Capitalize boss name for display
                 display_name = boss_key.capitalize()
                 # Format with integer level and formatted XP
-                xp_str = self.format_price(xp) # Use format_price for consistency
+                xp_str = format_price(xp) # Use format_price for consistency
                 slayer_levels.append(f"{display_name} {level} ({xp_str} XP)")
 
             output_message = f"{target_ign}'s Slayers: { ' | '.join(slayer_levels) }"
@@ -1174,7 +724,7 @@ class Bot(commands.Bot):
         """
         print(f"[COMMAND] Rtca command triggered by {ctx.author.name}: {args}")
         if not args:
-            await self._send_message(ctx, f"Usage: {self.prefix}rtca <username> [target_ca=50] [floor=m7]")
+            await self._send_message(ctx, f"Usage: {self._prefix}rtca <username> [target_ca=50] [floor=m7]")
             return
 
         # --- 1. Argument Parsing ---
@@ -1189,7 +739,7 @@ class Bot(commands.Bot):
             if len(parts) > 2:
                 floor_str = parts[2].lower() # Normalize floor to lowercase
             if len(parts) > 3:
-                 await self._send_message(ctx, f"Too many arguments. Usage: {self.prefix}rtca <username> [target_ca=50] [floor=m7]")
+                 await self._send_message(ctx, f"Too many arguments. Usage: {self._prefix}rtca <username> [target_ca=50] [floor=m7]")
                  return
 
             # Validate target_ca
@@ -1202,7 +752,7 @@ class Bot(commands.Bot):
                  raise ValueError("Invalid floor. Please specify 'm6' or 'm7'.")
                  
         except ValueError as e:
-            await self._send_message(ctx, f"Invalid argument: {e}. Usage: {self.prefix}rtca <username> [target_ca=50] [floor=m7]")
+            await self._send_message(ctx, f"Invalid argument: {e}. Usage: {self._prefix}rtca <username> [target_ca=50] [floor=m7]")
             return
         # --- End Argument Parsing ---
 
@@ -1229,14 +779,14 @@ class Bot(commands.Bot):
             current_class_levels = {}
             total_level_sum = 0.0
             class_xps = {}
-            for class_name in CLASS_NAMES:
+            for class_name in constants.CLASS_NAMES:
                 class_xp = player_classes_data.get(class_name, {}).get('experience', 0)
-                level = self.calculate_class_level(class_xp) # Uses Catacombs table, max 50
+                level = calculate_class_level(self.leveling_data, class_xp)  # Uses Catacombs table, max 50
                 current_class_levels[class_name] = level
                 class_xps[class_name] = class_xp
                 total_level_sum += level
             
-            current_ca = total_level_sum / len(CLASS_NAMES) if CLASS_NAMES else 0.0
+            current_ca = total_level_sum / len(constants.CLASS_NAMES) if constants.CLASS_NAMES else 0.0
             print(f"[DEBUG][RtcaCmd] {target_ign} - Current CA: {current_ca:.2f}, Target CA: {target_ca_milestone}")
 
             # Check if target is already reached
@@ -1250,10 +800,10 @@ class Bot(commands.Bot):
 
             # Determine XP per run based on selected floor
             if floor_str == 'm6':
-                xp_per_run = BASE_M6_CLASS_XP
+                xp_per_run = constants.BASE_M6_CLASS_XP
                 selected_floor_name = "M6"
             else: # Default or 'm7'
-                xp_per_run = BASE_M7_CLASS_XP
+                xp_per_run = constants.BASE_M7_CLASS_XP
                 selected_floor_name = "M7"
                 
             # --- TEMPORARY TEST: Increase XP by 10% ---
@@ -1267,7 +817,7 @@ class Bot(commands.Bot):
                 return
 
             # Calculate target XP threshold (XP needed to COMPLETE the target level)
-            xp_required_for_target_level = self._get_xp_for_target_level(target_level_for_milestone)
+            xp_required_for_target_level = _get_xp_for_target_level(self.leveling_data, target_level_for_milestone)
             print(f"[DEBUG][RtcaCmd] Target Level XP Threshold: {xp_required_for_target_level:,.0f}")
             print(f"[DEBUG][RtcaCmd] XP/Run Used ({selected_floor_name}): {xp_per_run:,.0f}")
             # --- End Setup Simulation Parameters ---
@@ -1275,10 +825,10 @@ class Bot(commands.Bot):
             # --- 5. Initialize Simulation ---
             total_runs_simulated = 0
             xp_needed_dict = {} # Stores remaining XP needed for each class
-            active_runs_per_class = {cn: 0 for cn in CLASS_NAMES} # Tracks active runs per class
+            active_runs_per_class = {cn: 0 for cn in constants.CLASS_NAMES} # Tracks active runs per class
             
             print(f"[DEBUG][RtcaSim] --- Initializing Simulation Needs ---")
-            for class_name in CLASS_NAMES:
+            for class_name in constants.CLASS_NAMES:
                 current_xp = class_xps[class_name]
                 current_lvl = current_class_levels[class_name]
                 if current_lvl < target_level_for_milestone:
@@ -1356,7 +906,7 @@ class Bot(commands.Bot):
             output_message = base_message + breakdown_str
             
             # Check length and potentially remove breakdown if too long
-            if len(output_message) > MAX_MESSAGE_LENGTH:
+            if len(output_message) > constants.MAX_MESSAGE_LENGTH:
                 print("[WARN][RtcaCmd] Output message with breakdown too long. Sending without breakdown.")
                 output_message = base_message # Fallback to message without breakdown
 
