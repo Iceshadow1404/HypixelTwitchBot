@@ -1344,12 +1344,12 @@ class Bot(commands.Bot):
 
             # --- 7. Format and Send Output ---
             breakdown_parts = [f"{cn.capitalize()}: {count}" for cn, count in active_runs_per_class.items() if count > 0]
-            breakdown_str = " | Active Runs: " + ", ".join(breakdown_parts) if breakdown_parts else ""
+            breakdown_str = " | ".join(breakdown_parts) if breakdown_parts else ""
 
             base_message = (
+
                 f"{target_ign} (CA {current_ca:.2f}) -> Target CA {target_ca_milestone}: "
-                f"Needs approx. {total_runs_simulated:,} {selected_floor_name} runs "
-                f"(@ {xp_per_run:,.0f} XP/run)."
+                f"Needs approx {total_runs_simulated:,} {selected_floor_name} runs "
             )
             
             output_message = base_message + breakdown_str
