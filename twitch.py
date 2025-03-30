@@ -847,7 +847,7 @@ class Bot(commands.Bot):
             traceback.print_exc()
             await self._send_message(ctx, "An unexpected error occurred while fetching mayor information.")
 
-    @commands.command(name='bank', aliases=['purse', 'money', 'bal'])
+    @commands.command(name='bank', aliases=['purse', 'money'])
     async def bank_command(self, ctx: commands.Context, *, ign: str | None = None):
         """Shows the player's bank, purse, and personal bank balance."""
         profile_data = await self._get_player_profile_data(ctx, ign)
@@ -989,6 +989,14 @@ class Bot(commands.Bot):
             print(f"[ERROR][EssenceCmd] Unexpected error processing essence data: {e}")
             traceback.print_exc()
             await self._send_message(ctx, "An unexpected error occurred while fetching essences.")
+
+    @commands.command(name='networth', aliases=['nw'])
+    async def networth_command(self, ctx: commands.Context, *, ign: str | None = None):
+        """Informs the user that networth calculation is not supported and suggests alternatives."""
+        # ign parameter is accepted but ignored, to match other commands' structure
+        info_message = "Networth calculation isn't possible with this bot. Use SkyHelper or Soopy for accurate networth."
+        print(f"[COMMAND] Networth info command triggered by {ctx.author.name} in #{ctx.channel.name}")
+        await self._send_message(ctx, info_message)
 
     # --- Cleanup ---
     async def close(self):
