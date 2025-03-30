@@ -186,29 +186,35 @@ class Bot(commands.Bot):
         Returns (target_ign, player_uuid, latest_profile_data) or None if an error occurred.
         """
         if not self.hypixel_api_key:
+            # Use direct ctx.send for initial API key check as _send_message might fail early
             await ctx.send("Hypixel API is not configured. Please check the .env file.")
             return None
 
         target_ign = ign if ign else ctx.author.name
         target_ign = target_ign.lstrip('@')
+        # Use direct ctx.send for initial feedback message
         await ctx.send(f"Searching data for '{target_ign}'...")
 
         player_uuid = await self._get_uuid_from_ign(target_ign)
         if not player_uuid:
-            await ctx.send(f"Could not find Minecraft account for '{target_ign}'. Please check the username.")
+            # Use _send_message for this potentially delayed error message
+            await self._send_message(ctx, f"Could not find Minecraft account for '{target_ign}'. Please check the username.")
             return None
 
         profiles = await self._get_skyblock_data(player_uuid)
         if profiles is None: # API error occurred
-            await ctx.send(f"Could not fetch SkyBlock profiles for '{target_ign}'. An API error occurred.")
+            # Use _send_message for this potentially delayed error message
+            await self._send_message(ctx, f"Could not fetch SkyBlock profiles for '{target_ign}'. An API error occurred.")
             return None
         if not profiles: # API succeeded but returned no profiles
-            await ctx.send(f"'{target_ign}' seems to have no SkyBlock profiles yet.")
+            # Use _send_message for this potentially delayed error message
+            await self._send_message(ctx, f"'{target_ign}' seems to have no SkyBlock profiles yet.")
             return None
 
         latest_profile = self._find_latest_profile(profiles, player_uuid)
         if not latest_profile:
-            await ctx.send(f"Could not find an active profile for '{target_ign}'. Player must be a member of at least one profile.")
+            # Use _send_message for this potentially delayed error message
+            await self._send_message(ctx, f"Could not find an active profile for '{target_ign}'. Player must be a member of at least one profile.")
             return None
 
         return target_ign, player_uuid, latest_profile
