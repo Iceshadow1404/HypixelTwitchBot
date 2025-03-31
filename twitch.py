@@ -314,7 +314,7 @@ class Bot(commands.Bot):
             traceback.print_exc()
             await self._send_message(ctx, "An unexpected error occurred while fetching auctions.")
 
-    @commands.command(name='dungeon', aliases=['dungeons'])
+    @commands.command(name='dungeon', aliases=['dungeons', 'cata'])
     async def dungeon_command(self, ctx: commands.Context, *, ign: str | None = None):
         """Shows the player's Catacombs level and XP."""
         profile_data = await self._get_player_profile_data(ctx, ign)
@@ -1140,7 +1140,7 @@ class Bot(commands.Bot):
             # --- 6. Format and Send Output ---
             output_message = (
                 f"{target_ign} (Cata {current_level:.2f}) needs {xp_needed:,.0f} XP for level {target_level}. "
-                f"{floor_name}: {runs_needed:,} runs"
+                f"{floor_name}: {runs_needed:,} runs ({180000 if floor_str == 'm6' else 500000:,} XP/run)"
             )
             await self._send_message(ctx, output_message)
 
