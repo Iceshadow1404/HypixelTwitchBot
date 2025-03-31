@@ -5,6 +5,7 @@ import traceback
 from datetime import datetime
 import math
 import re
+from typing import TypeAlias
 
 import aiohttp
 from twitchio.ext import commands
@@ -13,6 +14,8 @@ import constants
 import utils
 from calculations import _get_xp_for_target_level, calculate_hotm_level, \
     calculate_average_skill_level, calculate_dungeon_level, calculate_class_level, calculate_slayer_level, format_price
+from commands.overflow_skills import process_overflow_skill_command
+from profiletyping import Profile
 from utils import _find_latest_profile, _get_uuid_from_ign, _get_skyblock_data
 
 
@@ -31,7 +34,7 @@ class Bot(commands.Bot):
 
     # --- Helper Methods ---
 
-    async def _get_player_profile_data(self, ctx: commands.Context, ign: str | None) -> tuple[str, str, dict] | None:
+    async def _get_player_profile_data(self, ctx: commands.Context, ign: str | None) -> tuple[str, str, Profile] | None:
         """
         Handles the common boilerplate for commands needing player profile data.
         Checks API key, gets UUID, fetches profiles, finds latest profile.
@@ -211,7 +214,9 @@ class Bot(commands.Bot):
             print(f"[ERROR][KuudraCmd] Unexpected error processing Kuudra data: {e}")
             traceback.print_exc()
             await self._send_message(ctx, "An unexpected error occurred while fetching Kuudra completions.")
-
+    @commands.command(name='oskill', aliases=['skillo', 'oskills', 'skillso', 'overflow'])
+    async def skill_command(self, ctx: commands.Context, *, ign: str|None = None):
+        await process_overflow_skill_command(ctx, ign)
     @commands.command(name='auctions', aliases=['ah'])
     async def auctions_command(self, ctx: commands.Context, *, ign: str | None = None):
         """Shows active auctions for a player, limited by character count."""
@@ -1236,3 +1241,5 @@ class Bot(commands.Bot):
         except Exception as e:
             print(f"[ERROR][MayorCmd] Network error fetching election data: {e}")
             return None
+
+IceBot: TypeAlias = Bot

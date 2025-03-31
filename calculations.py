@@ -1,7 +1,8 @@
 import constants
+from utils import LevelingData
 
 
-def _get_xp_for_target_level(leveling_data, target_level: int) -> float:
+def _get_xp_for_target_level(leveling_data: LevelingData, target_level: int) -> float:
     """Calculates the total cumulative XP required to COMPLETE a target level.
     Uses the Catacombs XP table.
     Target level is 1-based (e.g., target_level=50 means completing level 50).
@@ -31,7 +32,7 @@ def _get_xp_for_target_level(leveling_data, target_level: int) -> float:
     return float(total_xp)
 
 
-def calculate_skill_level(leveling_data, xp: float, skill_name: str, member_data: dict | None = None) -> float:
+def calculate_skill_level(leveling_data: LevelingData, xp: float, skill_name: str, member_data: dict | None = None) -> float:
     """Calculates the level of a skill based on XP, considering level caps and special skills."""
     if not leveling_data['xp_table']:
         return 0.0
@@ -84,7 +85,7 @@ def calculate_skill_level(leveling_data, xp: float, skill_name: str, member_data
     return min(float(level), float(effective_max_level))
 
 
-def calculate_hotm_level(leveling_data, xp: float) -> float:
+def calculate_hotm_level(leveling_data: LevelingData, xp: float) -> float:
     """Calculates the Heart of the Mountain level based on cumulative XP per level.
     Assumes 'hotm_brackets' in leveling_data contains XP needed for each level.
     """
@@ -142,7 +143,7 @@ def calculate_hotm_level(leveling_data, xp: float) -> float:
     return float(level)
 
 
-def calculate_average_skill_level(leveling_data, profile: dict, player_uuid: str) -> float | None:
+def calculate_average_skill_level(leveling_data: LevelingData, profile: dict, player_uuid: str) -> float | None:
     """Calculates the average skill level, excluding cosmetics like Carpentry and Runecrafting if desired."""
     print(f"[DEBUG][Calc] Calculating Skill Average for profile {profile.get('profile_id', 'UNKNOWN')}")
     member_data = profile.get('members', {}).get(player_uuid)
@@ -183,7 +184,7 @@ def calculate_average_skill_level(leveling_data, profile: dict, player_uuid: str
         return 0.0
 
 
-def calculate_dungeon_level(leveling_data, xp: float) -> float:
+def calculate_dungeon_level(leveling_data: LevelingData, xp: float) -> float:
     """Calculates the Catacombs level based on XP, including progress as decimal points."""
     if not leveling_data['catacombs_xp']:
         print("[WARN][Calc] Catacombs XP table not loaded.")
@@ -222,7 +223,7 @@ def calculate_dungeon_level(leveling_data, xp: float) -> float:
     return float(level)
 
 
-def calculate_class_level(leveling_data, xp: float) -> float:
+def calculate_class_level(leveling_data: LevelingData, xp: float) -> float:
     """Calculates the class level based on XP using the Catacombs XP table up to level 50."""
     if not leveling_data['catacombs_xp']:
         print("[WARN][Calc] Catacombs XP table not loaded for class calculation.")
@@ -259,7 +260,7 @@ def calculate_class_level(leveling_data, xp: float) -> float:
     return float(level)
 
 
-def calculate_slayer_level(leveling_data, xp: float, boss_key: str) -> int:
+def calculate_slayer_level(leveling_data: LevelingData, xp: float, boss_key: str) -> int:
     """Calculates the integer slayer level for a specific boss based on XP thresholds."""
     if 'slayer_xp' not in leveling_data or boss_key not in leveling_data['slayer_xp']:
         print(f"[WARN][Calc] Slayer XP thresholds not loaded for boss: {boss_key}")

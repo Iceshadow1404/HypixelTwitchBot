@@ -1,12 +1,21 @@
 import json
 import traceback
+from typing import TypedDict
 
 import aiohttp
 
 import constants
 
 
-def _load_leveling_data() -> dict:
+class LevelingData(TypedDict):
+    xp_table: list[int]
+    level_caps: dict[str, int]
+    catacombs_xp: list[int]
+    hotm_brackets: list[int]
+    slayer_xp: dict[str, list[int]]
+
+
+def _load_leveling_data() -> LevelingData:
     """Loads leveling data from leveling.json."""
     try:
         with open('leveling.json', 'r', encoding='utf-8') as f:
@@ -22,8 +31,8 @@ def _load_leveling_data() -> dict:
         print("[ERROR] leveling.json not found. Level calculations will fail.")
         return {'xp_table': [], 'level_caps': {}, 'catacombs_xp': [], 'hotm_brackets': [], 'slayer_xp': {}}
     except json.JSONDecodeError as e:
-         print(f"[ERROR] Error decoding leveling.json: {e}. Level calculations will fail.")
-         return {'xp_table': [], 'level_caps': {}, 'catacombs_xp': [], 'hotm_brackets': [], 'slayer_xp': {}}
+        print(f"[ERROR] Error decoding leveling.json: {e}. Level calculations will fail.")
+        return {'xp_table': [], 'level_caps': {}, 'catacombs_xp': [], 'hotm_brackets': [], 'slayer_xp': {}}
     except Exception as e:
         print(f"[ERROR] Unexpected error loading leveling.json: {e}")
         traceback.print_exc()
@@ -79,8 +88,8 @@ async def _get_uuid_from_ign(username: str) -> str | None:
                         print(f"[WARN][API] Mojang API: No UUID found for '{username}'.")
                         # Return None if UUID is not found, even if status is 200
                         return None
-                    return uuid # Return UUID if found
-                elif response.status == 204: # No content -> User not found
+                    return uuid  # Return UUID if found
+                elif response.status == 204:  # No content -> User not found
                     print(f"[WARN][API] Mojang API: Username '{username}' not found.")
                     return None
                 else:
@@ -107,7 +116,7 @@ async def _get_skyblock_data(hypixel_api_key, uuid: str) -> list | None:
         async with aiohttp.ClientSession() as session:
             async with session.get(constants.HYPIXEL_API_URL, params=params) as response:
                 print(f"[DEBUG][API] Hypixel profiles response status: {response.status}")
-                response_text = await response.text() # Read text first for debugging
+                response_text = await response.text()  # Read text first for debugging
             if response.status == 200:
                 try:
                     data = json.loads(response_text)
@@ -118,13 +127,14 @@ async def _get_skyblock_data(hypixel_api_key, uuid: str) -> list | None:
                             json.dump(data, f, indent=4)
                         print(f"[DEBUG][API] Hypixel response saved to '{debug_file}'.")
                     except IOError as io_err:
-                         print(f"[WARN][API] Failed to save debug file '{debug_file}': {io_err}")
+                        print(f"[WARN][API] Failed to save debug file '{debug_file}': {io_err}")
 
                     if data.get("success"):
                         profiles = data.get('profiles')
                         if profiles is None:
-                                 print(f"[WARN][API] Hypixel API success, but 'profiles' field is missing or null for {uuid}.")
-                                 return [] # Return empty list instead of None if success=true but no profiles
+                            print(
+                                f"[WARN][API] Hypixel API success, but 'profiles' field is missing or null for {uuid}.")
+                            return []  # Return empty list instead of None if success=true but no profiles
                         if not isinstance(profiles, list):
                             print(f"[ERROR][API] Hypixel API success, but 'profiles' is not a list ({type(profiles)}).")
                             return None
@@ -148,4 +158,3 @@ async def _get_skyblock_data(hypixel_api_key, uuid: str) -> list | None:
         print(f"[ERROR][API] Unexpected error during Hypixel API request: {e}")
         traceback.print_exc()
         return None
-
