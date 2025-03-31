@@ -1052,6 +1052,103 @@ class Bot(commands.Bot):
              traceback.print_exc()
              await self._send_message(ctx, f"An unexpected error occurred while checking the current run for '{target_ign}'.")
 
+    @commands.command(name='runstillcata')
+    async def runstillcata_command(self, ctx: commands.Context, *, args: str | None = None):
+        """Shows how many M6/M7 runs are needed until the next Catacombs level.
+        Syntax: #runstillcata <username> [target_level] [floor=m7]
+        """
+        print(f"[COMMAND] RunsTillCata command triggered by {ctx.author.name}: {args}")
+
+        # --- 1. Argument Parsing ---
+        ign: str | None = None
+        target_level_str: str | None = None
+        floor_str: str = 'm7'   # Default floor
+
+        if not args:
+            ign = ctx.author.name # Default to message author if no args provided
+            print(f"[DEBUG][RunsTillCataCmd] No arguments provided, defaulting IGN to: {ign}")
+        else:
+            parts = args.split()
+            ign = parts[0] # First part is always IGN if args are provided
+            print(f"[DEBUG][RunsTillCataCmd] Arguments provided, parsed IGN: {ign}")
+
+            # Only attempt to parse target_level and floor if more than one part exists
+            if len(parts) > 1:
+                target_level_str = parts[1]
+                print(f"[DEBUG][RunsTillCataCmd] Parsed target_level_str: {target_level_str}")
+            if len(parts) > 2:
+                floor_str = parts[2].lower() # Normalize floor to lowercase
+                print(f"[DEBUG][RunsTillCataCmd] Parsed floor_str: {floor_str}")
+            if len(parts) > 3:
+                await self._send_message(ctx, f"Too many arguments. Usage: {self._prefix}runstillcata <username> [target_level] [floor=m7]")
+                return
+
+        # --- Argument Validation ---
+        try:
+            # Validate floor
+            if floor_str not in ['m6', 'm7']:
+                raise ValueError("Invalid floor. Please specify 'm6' or 'm7'.")
+            print(f"[DEBUG][RunsTillCataCmd] Validated floor_str: {floor_str}")
+
+            # Validate target level if provided
+            target_level = None
+            if target_level_str:
+                target_level = int(target_level_str)
+                if not 1 <= target_level <= 99:
+                    raise ValueError("Target level must be between 1 and 99.")
+                print(f"[DEBUG][RunsTillCataCmd] Validated target_level: {target_level}")
+
+        except ValueError as e:
+            await self._send_message(ctx, f"Invalid argument: {e}. Usage: {self._prefix}runstillcata <username> [target_level] [floor=m7]")
+            return
+        # --- End Argument Parsing & Validation ---
+
+        # --- 2. Get Player Data ---
+        profile_data = await self._get_player_profile_data(ctx, ign)
+        if not profile_data:
+            return # Error message already sent by helper
+
+        target_ign, player_uuid, latest_profile = profile_data
+        profile_name = latest_profile.get('cute_name', 'Unknown')
+
+        try:
+            # --- 3. Get Current Catacombs XP and Level ---
+            member_data = latest_profile.get('members', {}).get(player_uuid, {})
+            dungeons_data = member_data.get('dungeons', {}).get('dungeon_types', {}).get('catacombs', {})
+            current_xp = dungeons_data.get('experience', 0)
+            current_level = calculate_dungeon_level(self.leveling_data, current_xp)
+            
+            # --- 4. Calculate XP for Target Level ---
+            if target_level is None:
+                # If no target level provided, use next level
+                target_level = math.ceil(current_level)
+            xp_for_target_level = _get_xp_for_target_level(self.leveling_data, target_level)
+            xp_needed = xp_for_target_level - current_xp
+
+            if xp_needed <= 0:
+                await self._send_message(ctx, f"{target_ign} has already reached Catacombs level {target_level}!")
+                return
+
+            # --- 5. Calculate Runs Needed for Selected Floor ---
+            if floor_str == 'm6':
+                runs_needed = math.ceil(xp_needed / 180000)  # 180k XP per M6 run
+                floor_name = "M6"
+            else:  # m7
+                runs_needed = math.ceil(xp_needed / 500000)  # 500k XP per M7 run
+                floor_name = "M7"
+
+            # --- 6. Format and Send Output ---
+            output_message = (
+                f"{target_ign} (Cata {current_level:.2f}) needs {xp_needed:,.0f} XP for level {target_level}. "
+                f"{floor_name}: {runs_needed:,} runs"
+            )
+            await self._send_message(ctx, output_message)
+
+        except Exception as e:
+            print(f"[ERROR][RunsTillCataCmd] Unexpected error: {e}")
+            traceback.print_exc()
+            await self._send_message(ctx, f"An unexpected error occurred while calculating runs needed for '{target_ign}'.")
+
     # --- Cleanup ---
     async def close(self):
         """Gracefully shuts down the bot and closes sessions."""
