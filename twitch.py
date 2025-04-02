@@ -977,6 +977,13 @@ class Bot(commands.Bot):
         await self._send_message(ctx, "YEP skill issue confirmed!")
     dexter_command.hidden = True
 
+    @commands.command(name='dongo')
+    async def dexter_command(self, ctx: commands.Context):
+        """Hidden command that responds with a skill issue confirmation."""
+        await self._send_message(ctx, "🥚")
+
+    dexter_command.hidden = True
+
     @commands.command(name='help')
     async def help_command(self, ctx: commands.Context):
         """Shows this help message listing all available commands."""
