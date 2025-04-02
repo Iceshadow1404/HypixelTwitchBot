@@ -42,7 +42,8 @@ def load_config():
     if not config['hypixel_api_key']:  
         print("Error: HYPIXEL_API_KEY is missing in your .env file.")
         print("You can request a key here: https://developer.hypixel.net/")
-        print("Warning: Bot starting without Hypixel API functionality.")  
+        print("Warning: Bot starting without Hypixel API functionality.")
+        print()
 
     # Ensure nickname is lowercase
     config['nickname'] = config['nickname'].lower()
