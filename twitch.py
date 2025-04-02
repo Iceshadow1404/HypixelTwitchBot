@@ -6,6 +6,7 @@ from datetime import datetime
 import math
 import re
 from typing import TypeAlias
+import os
 
 import aiohttp
 from twitchio.ext import commands
@@ -28,9 +29,13 @@ class Bot(commands.Bot):
         self.start_time = datetime.now()
         self.hypixel_api_key = hypixel_api_key
         self.leveling_data = utils._load_leveling_data()
+        # Store initial channels from .env for later reference if needed
+        self._initial_env_channels = initial_channels 
 
+        # Initialize bot with only channels from .env first
         super().__init__(token=token, prefix=prefix, nick=nickname, initial_channels=initial_channels)
-        print(f"[INFO] Bot initialized for channels: {initial_channels}")
+        print(f"[INFO] Bot initialized, attempting to join initial channels: {initial_channels}")
+        # Streamer monitoring will be started in event_ready after joining initial channels
 
     # --- Helper Methods ---
 
@@ -78,21 +83,59 @@ class Bot(commands.Bot):
     # --- Bot Events ---
 
     async def event_ready(self):
-        """Called once the bot has successfully connected to Twitch."""
+        """Called once the bot has successfully connected to Twitch and joined initial channels."""
         try:
-            print("[INFO] Bot starting up...")
+            print("[INFO] Bot starting up... Initial connection established.")
 
             print(f'------')
             print(f'Logged in as: {self.nick} ({self.user_id})')
-            connected_channel_names = [ch.name for ch in self.connected_channels]
-            print(f'Connected to channels: {connected_channel_names}')
+            # Filter out None before accessing name
+            initial_connected_channels = [ch.name for ch in self.connected_channels if ch is not None]
+            print(f'Successfully joined initial channels from .env: {initial_connected_channels}')
             print(f'------')
 
-            if self.connected_channels:
-                print(f"[INFO] Bot successfully connected to {len(self.connected_channels)} channel(s).")
+            # --- Fetch and Join Live Hypixel Streamers ---
+            print("[INFO] Performing initial scan for live Hypixel SkyBlock streamers...")
+            live_streamer_names = await self._fetch_live_hypixel_streamers()
+
+            if live_streamer_names is None:
+                print("[WARN] Could not fetch live streamers during startup (API/Token issue?). Monitoring will still run.")
+            else:
+                print(f"[INFO] Found {len(live_streamer_names)} potential live Hypixel SkyBlock streamers.")
+                # Determine which channels to join (those not already connected to)
+                # Filter out None before accessing name
+                currently_connected = {ch.name for ch in self.connected_channels if ch is not None} # Use a set for efficient lookup
+                streamers_to_join = [name for name in live_streamer_names if name not in currently_connected]
+
+                if streamers_to_join:
+                    print(f"[INFO] Attempting to join {len(streamers_to_join)} newly found live channels: {streamers_to_join}")
+                    try:
+                        await self.join_channels(streamers_to_join)
+                        print("[INFO] Join command sent. Waiting briefly for channel list update...")
+                        await asyncio.sleep(5) # Give TwitchIO time to process joins and update self.connected_channels
+                    except Exception as join_error:
+                        print(f"[ERROR] Error trying to join channels {streamers_to_join}: {join_error}")
+                else:
+                    print("[INFO] All found live streamers are already in the connected channel list.")
+            # --- End Fetch and Join ---
+
+            # --- Final Output ---
+            # Filter out None before accessing name
+            final_connected_channels = [ch.name for ch in self.connected_channels if ch is not None]
+            print(f'------')
+            print(f'Final connected channels list ({len(final_connected_channels)} total): {final_connected_channels}')
+            print(f'------')
+
+            if final_connected_channels:
+                print(f"[INFO] Bot setup complete. Monitoring active streams.")
                 print("Bot is ready!")
             else:
-                print("[WARN] Bot connected to Twitch but did not join any channels.")
+                print("[WARN] Bot connected to Twitch but is not in any channels.")
+
+            # --- Start Background Monitoring ---
+            print("[INFO] Starting background stream monitor task...")
+            asyncio.create_task(self._monitor_streams())
+            # -----------------------------------
 
         except Exception as e:
             print(f"[ERROR] Error during event_ready: {e}")
@@ -109,7 +152,9 @@ class Bot(commands.Bot):
 
         # Check if the message came from a channel the bot is actually connected to
         # This is needed because twitchio might receive messages from channels it tried to join but failed
-        connected_channel_names = [ch.name for ch in self.connected_channels]
+        # Using a set for potentially faster lookups if the channel list grows large
+        # Filter out None values before accessing name
+        connected_channel_names = {ch.name for ch in self.connected_channels if ch is not None}
         if message.channel.name not in connected_channel_names:
             # print(f"[DEBUG] Ignored message from non-connected channel: #{message.channel.name}")
             return
@@ -122,11 +167,13 @@ class Bot(commands.Bot):
 
     async def _send_message(self, ctx: commands.Context, message: str):
         """Helper function to send messages, incorporating workarounds for potential issues."""
-        print(f"[DEBUG][Send] Attempting to send to #{ctx.channel.name}: {message[:100]}...") # Log first 100 chars
+        # Truncate message for logging if it's too long
+        log_message = message[:450] + '...' if len(message) > 450 else message
+        print(f"[DEBUG][Send] Attempting to send to #{ctx.channel.name}: {log_message}") 
         try:
             # --- WORKAROUND: Small delay before sending ---
             # May help with potential silent rate limits or timing issues after await calls.
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(0.3) 
             # ---------------------------------------------
 
             # --- WORKAROUND: Re-fetch channel object ---
@@ -806,7 +853,7 @@ class Bot(commands.Bot):
             class_xps = {}
             for class_name in constants.CLASS_NAMES:
                 class_xp = player_classes_data.get(class_name, {}).get('experience', 0)
-                level = calculate_class_level(self.leveling_data, class_xp)  # Uses Catacombs table, max 50
+                level = calculate_class_level(self.leveling_data, class_xp)
                 current_class_levels[class_name] = level
                 class_xps[class_name] = class_xp
                 total_level_sum += level
@@ -1125,8 +1172,10 @@ class Bot(commands.Bot):
             
             # --- 4. Calculate XP for Target Level ---
             if target_level is None:
-                # If no target level provided, use next level
-                target_level = math.ceil(current_level)
+                # If no target level provided, use next integer level
+                target_level = math.ceil(current_level) 
+                if target_level == math.floor(current_level): # If current level is integer, aim for next one
+                    target_level += 1
             xp_for_target_level = _get_xp_for_target_level(self.leveling_data, target_level)
             xp_needed = xp_for_target_level - current_xp
 
@@ -1136,16 +1185,22 @@ class Bot(commands.Bot):
 
             # --- 5. Calculate Runs Needed for Selected Floor ---
             if floor_str == 'm6':
-                runs_needed = math.ceil(xp_needed / 180000)  # 180k XP per M6 run
+                xp_per_run = 180000 # 180k XP per M6 run
                 floor_name = "M6"
             else:  # m7
-                runs_needed = math.ceil(xp_needed / 500000)  # 500k XP per M7 run
+                xp_per_run = 500000 # 500k XP per M7 run
                 floor_name = "M7"
+            
+            if xp_per_run <= 0:
+                 await self._send_message(ctx, "Invalid XP per run configured.")
+                 return
+
+            runs_needed = math.ceil(xp_needed / xp_per_run)
 
             # --- 6. Format and Send Output ---
             output_message = (
                 f"{target_ign} (Cata {current_level:.2f}) needs {xp_needed:,.0f} XP for level {target_level}. "
-                f"{floor_name}: {runs_needed:,} runs ({180000 if floor_str == 'm6' else 500000:,} XP/run)"
+                f"{floor_name}: {runs_needed:,} runs ({xp_per_run:,} XP/run)"
             )
             await self._send_message(ctx, output_message)
 
@@ -1207,7 +1262,7 @@ class Bot(commands.Bot):
                 class_match = re.match(r'^([a-zA-Z]+)', class_info_part)
                 if class_match:
                     final_class = class_match.group(1)
-                level_match = re.search(r'\((\d+)\)', class_info_part)
+                level_match = re.search(r'\\((\\d+)\\)', class_info_part)
                 if level_match:
                     final_level = level_match.group(1)
 
@@ -1219,27 +1274,132 @@ class Bot(commands.Bot):
             print(f"[WARN][CurrDungeon] Error parsing participant '{raw_display_name}': {e}")
             return None # Return None on any parsing error
 
-    async def _get_current_mayor_name(self) -> str | None:
-        if not self.hypixel_api_key:
+    async def _fetch_live_hypixel_streamers(self) -> list[str] | None:
+        """Fetches live Minecraft streams, filters for Hypixel SkyBlock, and returns a list of usernames."""
+        client_id = os.getenv("TWITCH_CLIENT_ID")
+        client_secret = os.getenv("TWITCH_CLIENT_SECRET")
+
+        if not client_id or not client_secret:
+            print("[ERROR][StreamFetch] TWITCH_CLIENT_ID or TWITCH_CLIENT_SECRET not found.")
             return None
+
+        access_token = await self._get_twitch_access_token(client_id, client_secret)
+        if not access_token:
+            print("[ERROR][StreamFetch] Failed to get access token.")
+            return None
+
+        live_streamer_usernames = []
+        url = "https://api.twitch.tv/helix/streams"
+        headers = {"Client-ID": client_id, "Authorization": f"Bearer {access_token}"}
+        cursor = None
 
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(constants.HYPIXEL_ELECTION_URL) as response:
+                while True:
+                    params = {"game_id": "27471", "first": 100} # Minecraft game ID
+                    if cursor:
+                        params["after"] = cursor
+
+                    async with session.get(url, headers=headers, params=params) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            streams = data.get("data", [])
+
+                            for stream in streams:
+                                title_lower = stream.get("title", "").lower()
+                                if "hypixel" in title_lower and any(term in title_lower for term in ["skyblock", "sky block", "sky-block"]):
+                                    username = stream.get("user_name", "").lower()
+                                    if username:
+                                        live_streamer_usernames.append(username)
+
+                            cursor = data.get("pagination", {}).get("cursor")
+                            if not cursor:
+                                break # No more pages
+                        elif response.status == 401: # Unauthorized - Token might have expired
+                            print("[WARN][StreamFetch] Received 401 Unauthorized. Attempting to refresh token.")
+                            access_token = await self._get_twitch_access_token(client_id, client_secret) # Try refreshing
+                            if not access_token:
+                                print("[ERROR][StreamFetch] Failed to refresh access token after 401.")
+                                return None # Give up if refresh fails
+                            headers["Authorization"] = f"Bearer {access_token}" # Update header
+                            # Loop will continue with the new token
+                        else:
+                            print(f"[ERROR][StreamFetch] Failed to get streams page. Status: {response.status}, Response: {await response.text()}")
+                            # Don't return None here, maybe some pages worked. Return what we have.
+                            break # Stop pagination on error
+
+            # Use a set to remove duplicates before returning
+            return list(set(live_streamer_usernames))
+
+        except Exception as e:
+            print(f"[ERROR][StreamFetch] Unexpected error fetching streams: {e}")
+            traceback.print_exc()
+            return None # Return None on unexpected errors
+
+    async def _monitor_streams(self):
+        """Continuously monitors for new Hypixel SkyBlock streams and joins them."""
+        # seen_streams set is removed as we dynamically check self.connected_channels now
+        print("[INFO][Monitor] Background stream monitor starting loop.")
+        
+        while True:
+            try:
+                print("[INFO][Monitor] Checking for live streams...")
+                live_streamer_names = await self._fetch_live_hypixel_streamers()
+
+                if live_streamer_names is None:
+                    print("[WARN][Monitor] Failed to fetch live streamers in monitoring loop. Will retry later.")
+                else:
+                    # Filter out None values before accessing name (Re-applying fix)
+                    currently_connected = {ch.name for ch in self.connected_channels if ch is not None}
+                    streamers_to_join = [name for name in live_streamer_names if name not in currently_connected]
+
+                    if streamers_to_join:
+                        print(f"[INFO][Monitor] Found new live channels to join: {streamers_to_join}")
+                        try:
+                            await self.join_channels(streamers_to_join)
+                            print(f"[INFO][Monitor] Joined channels: {streamers_to_join}")
+                            # No need to update self.streamers list
+                        except Exception as join_error:
+                            print(f"[ERROR][Monitor] Error trying to join channels {streamers_to_join}: {join_error}")
+                    # else: # Optional: Log that no *new* channels were found
+                    #     print("[INFO][Monitor] No new streams found requiring join.")
+
+                # Wait 2 minutes before next check
+                await asyncio.sleep(120)
+
+            except Exception as e:
+                print(f"[ERROR][Monitor] Unexpected error in monitoring loop: {e}")
+                traceback.print_exc()
+                print("[INFO][Monitor] Waiting 5 minutes after error before retrying...")
+                await asyncio.sleep(300) # Wait longer after an unexpected error
+
+    async def _get_twitch_access_token(self, client_id: str, client_secret: str) -> str | None:
+        """Get an access token from Twitch using client credentials."""
+        url = "https://id.twitch.tv/oauth2/token"
+        params = {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "grant_type": "client_credentials"
+        }
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, params=params) as response:
                     if response.status == 200:
                         data = await response.json()
-                        if data.get("success"):
-                            mayor_data = data.get('mayor')
-                            if mayor_data:
-                                return mayor_data.get('name', 'Unknown')
-                            else:
-                                return None
+                        token = data.get("access_token")
+                        if token:
+                             # print("[DEBUG] Successfully obtained/refreshed Twitch access token.")
+                             return token
                         else:
-                            return None
+                             print("[ERROR] Got 200 OK but no access token in response.")
+                             return None
                     else:
+                        print(f"[ERROR] Failed to get access token. Status: {response.status}, Response: {await response.text()}")
                         return None
         except Exception as e:
-            print(f"[ERROR][MayorCmd] Network error fetching election data: {e}")
+            print(f"[ERROR] Error getting access token: {e}")
+            traceback.print_exc()
             return None
 
 IceBot: TypeAlias = Bot
