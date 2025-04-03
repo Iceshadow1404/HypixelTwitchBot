@@ -1265,26 +1265,40 @@ class Bot(commands.Bot):
         """
         print(f"[COMMAND] CurrDungeon command triggered by {ctx.author.name}: {args}")
 
-        # --- 1. Determine Target IGN ---
-        target_ign = ign if ign else ctx.author.name
-        target_ign = target_ign.lstrip('@') # Remove potential @ prefix
-        print(f"[INFO][CurrDungeonCmd] Target player: {target_ign}")
+        # --- 1. Argument Parsing ---
+        ign: str | None = None
+        requested_profile_name: str | None = None
+
+        if not args:
+            ign = ctx.author.name  # Default to message author if no args provided
+        else:
+            parts = args.split()
+            ign = parts[0]
+            if len(parts) > 1:
+                requested_profile_name = parts[1]
+            if len(parts) > 2:
+                await self._send_message(ctx, f"Too many arguments. Usage: {self._prefix}currdungeon <username> [profile_name]")
+                return
+
+        # Clean up the IGN
+        ign = ign.lstrip('@')  # Remove potential @ prefix
+        print(f"[INFO][CurrDungeonCmd] Target player: {ign}")
         # -----------------------------
 
         # --- 2. Fetch Player Profile ---
-        profile_data = await self._get_player_profile_data(ctx, target_ign) # Use cleaned target_ign
+        profile_data = await self._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
         if not profile_data:
-            return # Error message already sent by helper
-        _fetched_ign, player_uuid, latest_profile = profile_data # Use _ign as target_ign might differ slightly (case)
-        profile_name = latest_profile.get('cute_name', 'Unknown')
+            return  # Error message already sent by helper
+        target_ign, player_uuid, selected_profile = profile_data
+        profile_name = selected_profile.get('cute_name', 'Unknown')
         # -----------------------------
 
         try:
             # --- 3. Find Latest Run ---
-            member_data = latest_profile.get('members', {}).get(player_uuid, {})
+            member_data = selected_profile.get('members', {}).get(player_uuid, {})
             dungeons_data = member_data.get('dungeons', {})
             treasures_data = dungeons_data.get('treasures', None)
-            runs_list = treasures_data.get('runs', []) if treasures_data else [] # Default to empty list
+            runs_list = treasures_data.get('runs', []) if treasures_data else []  # Default to empty list
 
             if not runs_list:
                 print(f"[INFO][CurrDungeonCmd] No runs found for {target_ign} in profile {profile_name}.")
@@ -1295,10 +1309,10 @@ class Bot(commands.Bot):
             max_ts = 0
             for run in runs_list:
                 if isinstance(run, dict):
-                     current_ts = run.get('completion_ts', 0)
-                     if isinstance(current_ts, (int, float)) and current_ts > max_ts:
-                         max_ts = current_ts
-                         latest_run = run
+                    current_ts = run.get('completion_ts', 0)
+                    if isinstance(current_ts, (int, float)) and current_ts > max_ts:
+                        max_ts = current_ts
+                        latest_run = run
 
             if latest_run is None:
                 print(f"[INFO][CurrDungeonCmd] Could not determine the latest run for {target_ign} (no valid timestamps).")
@@ -1314,7 +1328,7 @@ class Bot(commands.Bot):
 
             print(f"[DEBUG][CurrDungeonCmd] Latest Run TS: {completion_time_sec}, Current TS: {current_time_sec}, Diff: {time_diff_sec:.2f} sec")
 
-            if time_diff_sec > 600: # More than 10 minutes
+            if time_diff_sec > 600:  # More than 10 minutes
                 await self._send_message(ctx, f"{target_ign} didn't finish a run in the last 10min.")
                 return
             # -----------------------------
@@ -1331,15 +1345,15 @@ class Bot(commands.Bot):
             # Format teammates
             participants_data = latest_run.get('participants', [])
             teammate_strings = []
-            target_ign_lower = target_ign.lower() # Lowercase for comparison
+            target_ign_lower = target_ign.lower()  # Lowercase for comparison
             if isinstance(participants_data, list):
                 for participant in participants_data:
-                     if isinstance(participant, dict):
-                         raw_name = participant.get('display_name')
-                         if raw_name:
-                             parsed_teammate = self._parse_participant(raw_name, target_ign_lower)
-                             if parsed_teammate: # Add only if parsing succeeded and it's not the target player
-                                 teammate_strings.append(parsed_teammate)
+                    if isinstance(participant, dict):
+                        raw_name = participant.get('display_name')
+                        if raw_name:
+                            parsed_teammate = self._parse_participant(raw_name, target_ign_lower)
+                            if parsed_teammate:  # Add only if parsing succeeded and it's not the target player
+                                teammate_strings.append(parsed_teammate)
 
             teammates_str = ", ".join(teammate_strings) if teammate_strings else "No other participants listed"
 
@@ -1352,9 +1366,9 @@ class Bot(commands.Bot):
             # -----------------------------
 
         except Exception as e:
-             print(f"[ERROR][CurrDungeonCmd] Unexpected error processing current run for {target_ign}: {e}")
-             traceback.print_exc()
-             await self._send_message(ctx, f"An unexpected error occurred while checking the current run for '{target_ign}'.")
+            print(f"[ERROR][CurrDungeonCmd] Unexpected error processing current run for {target_ign}: {e}")
+            traceback.print_exc()
+            await self._send_message(ctx, f"An unexpected error occurred while checking the current run for '{target_ign}'.")
 
     @commands.command(name='runstillcata')
     async def runstillcata_command(self, ctx: commands.Context, *, args: str | None = None):
