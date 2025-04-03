@@ -16,6 +16,7 @@ import utils
 from calculations import _get_xp_for_target_level, calculate_hotm_level, \
     calculate_average_skill_level, calculate_dungeon_level, calculate_class_level, calculate_slayer_level, format_price
 from commands.overflow_skills import process_overflow_skill_command
+from commands.skills import process_skills_command
 from profiletyping import Profile
 from utils import _find_latest_profile, _get_uuid_from_ign, _get_skyblock_data
 
@@ -249,29 +250,12 @@ class Bot(commands.Bot):
             parts = args.split()
             ign = parts[0]
             if len(parts) > 1:
-                # Assume the second part is the profile name if provided
                 requested_profile_name = parts[1]
             if len(parts) > 2:
                 await self._send_message(ctx, f"Too many arguments. Usage: {self._prefix}skills <username> [profile_name]")
                 return
 
-        profile_data = await self._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
-        if not profile_data:
-            return # Error message already sent by helper
-
-        target_ign, player_uuid, selected_profile = profile_data
-        profile_name = selected_profile.get('cute_name', 'Unknown')
-
-        try:
-            average_level = calculate_average_skill_level(self.leveling_data, selected_profile, player_uuid)
-            if average_level is not None:
-                await self._send_message(ctx, f"{target_ign}'s Skill Average in profile '{profile_name}' is approximately {average_level:.2f}.")
-            else:
-                await self._send_message(ctx, f"Could not calculate skill level for '{target_ign}' in profile '{profile_name}'. Skill data might be missing.")
-        except Exception as e:
-            print(f"[ERROR][SkillsCmd] Unexpected error calculating skills: {e}")
-            traceback.print_exc()
-            await self._send_message(ctx, "An unexpected error occurred while calculating skill levels.")
+        await process_skills_command(ctx, ign, requested_profile_name=requested_profile_name)
 
     @commands.command(name='kuudra')
     async def kuudra_command(self, ctx: commands.Context, *, args: str | None = None):
