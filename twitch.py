@@ -1608,7 +1608,6 @@ class Bot(commands.Bot):
 
     async def _monitor_streams(self):
         """Continuously monitors for new Hypixel SkyBlock streams and joins them."""
-        # seen_streams set is removed as we dynamically check self.connected_channels now
         print("[INFO][Monitor] Background stream monitor starting loop.")
         
         while True:
@@ -1619,20 +1618,69 @@ class Bot(commands.Bot):
                 if live_streamer_names is None:
                     print("[WARN][Monitor] Failed to fetch live streamers in monitoring loop. Will retry later.")
                 else:
-                    # Filter out None values before accessing name (Re-applying fix)
+                    # Filter out None values before accessing name
                     currently_connected = {ch.name for ch in self.connected_channels if ch is not None}
                     streamers_to_join = [name for name in live_streamer_names if name not in currently_connected]
 
                     if streamers_to_join:
                         print(f"[INFO][Monitor] Found new live channels to join: {streamers_to_join}")
                         try:
+                            # Try to join channels directly without validation
+                            # TwitchIO will handle invalid channels gracefully
                             await self.join_channels(streamers_to_join)
-                            print(f"[INFO][Monitor] Joined channels: {streamers_to_join}")
-                            # No need to update self.streamers list
+                            print(f"[INFO][Monitor] Join command sent for channels: {streamers_to_join}")
+                            
+                            # Wait a moment for the joins to process
+                            await asyncio.sleep(5)
+                            
+                            # Check which channels were actually joined
+                            new_connected = {ch.name for ch in self.connected_channels if ch is not None}
+                            successfully_joined = set(streamers_to_join) & new_connected
+                            failed_channels = set(streamers_to_join) - new_connected
+                            
+                            if successfully_joined:
+                                print(f"[INFO][Monitor] Successfully joined channels: {successfully_joined}")
+                                for channel in successfully_joined:
+                                    channel_obj = self.get_channel(channel)
+                                    if channel_obj:
+                                        print(f"[DEBUG][Monitor] Channel '{channel}' details:")
+                                        print(f"[DEBUG][Monitor] - ID: {channel_obj.id}")
+                                        print(f"[DEBUG][Monitor] - Name: {channel_obj.name}")
+                                        print(f"[DEBUG][Monitor] - Joined at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                            
+                            if failed_channels:
+                                print(f"[WARN][Monitor] Failed to join channels: {failed_channels}")
+                                # Try to join failed channels individually with a delay
+                                for channel in failed_channels:
+                                    try:
+                                        await asyncio.sleep(1)  # Small delay between individual joins
+                                        await self.join_channels([channel])
+                                        print(f"[INFO][Monitor] Retried joining channel: {channel}")
+                                        # Check if retry was successful
+                                        await asyncio.sleep(2)
+                                        if channel in {ch.name for ch in self.connected_channels if ch is not None}:
+                                            print(f"[INFO][Monitor] Retry successful for channel: {channel}")
+                                        else:
+                                            print(f"[WARN][Monitor] Retry failed for channel: {channel}")
+                                    except Exception as e:
+                                        print(f"[WARN][Monitor] Failed to join channel {channel} after retry: {e}")
+                            
                         except Exception as join_error:
-                            print(f"[ERROR][Monitor] Error trying to join channels {streamers_to_join}: {join_error}")
-                    # else: # Optional: Log that no *new* channels were found
-                    #     print("[INFO][Monitor] No new streams found requiring join.")
+                            print(f"[ERROR][Monitor] Error trying to join channels: {join_error}")
+                            # Try to join channels individually as a fallback
+                            for channel in streamers_to_join:
+                                try:
+                                    await asyncio.sleep(1)  # Small delay between individual joins
+                                    await self.join_channels([channel])
+                                    print(f"[INFO][Monitor] Successfully joined channel: {channel}")
+                                    # Verify the join was successful
+                                    await asyncio.sleep(2)
+                                    if channel in {ch.name for ch in self.connected_channels if ch is not None}:
+                                        print(f"[DEBUG][Monitor] Verified successful join for channel: {channel}")
+                                    else:
+                                        print(f"[WARN][Monitor] Join verification failed for channel: {channel}")
+                                except Exception as e:
+                                    print(f"[WARN][Monitor] Failed to join channel {channel}: {e}")
 
                 # Wait 2 minutes before next check
                 await asyncio.sleep(120)
