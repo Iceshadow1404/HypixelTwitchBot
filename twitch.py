@@ -86,7 +86,7 @@ class Bot(commands.Bot):
             await ctx.send("Hypixel API is not configured. Please check the .env file.")
             return None
 
-        target_ign = ign if ign else ctx.author.name
+        target_ign = ign if ign.rstrip() != "" else ctx.author.name
         target_ign = target_ign.lstrip('@')
         # Use direct ctx.send for initial feedback message
         #await ctx.send(f"Searching data for '{target_ign}'...")
