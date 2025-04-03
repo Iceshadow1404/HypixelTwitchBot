@@ -353,7 +353,7 @@ class Bot(commands.Bot):
                 return
 
         # Call the separate processing function, passing the profile name
-        await process_overflow_skill_command(ctx, ign, requested_profile_name)
+        await process_overflow_skill_command(ctx, ign, requested_profile_name=requested_profile_name)
 
     @commands.command(name='auctions', aliases=['ah'])
     async def auctions_command(self, ctx: commands.Context, *, ign: str | None = None):

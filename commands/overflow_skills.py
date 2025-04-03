@@ -35,10 +35,10 @@ class XPProvider:
         return itertools.islice(inner(), self.max_level) if self.max_level is None else inner()
 
 
-async def process_overflow_skill_command(ctx: commands.Context, ign: str | None):
+async def process_overflow_skill_command(ctx: commands.Context, ign: str | None,  requested_profile_name):
     bot: IceBot = ctx.bot
     leveling_data: LevelingData = bot.leveling_data
-    data = await bot._get_player_profile_data(ctx, ign)
+    data = await bot._get_player_profile_data(ctx, ign, requested_profile_name)
     if not data:
         return
     _, uuid, profile = data
