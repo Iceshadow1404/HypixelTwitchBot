@@ -4,7 +4,8 @@ import traceback
 from typing import Iterator
 from twitchio.ext import commands
 from utils import LevelingData
-from calculations import calculate_average_skill_level
+from calculations import calculate_average_skill_level, calculate_skill_level
+from constants import AVERAGE_SKILLS_LIST
 
 
 if typing.TYPE_CHECKING:
@@ -24,13 +25,30 @@ async def process_skills_command(ctx: commands.Context, ign: str | None = None, 
     profile_name = selected_profile.get('cute_name', 'Unknown')
 
     try:
-        average_level = calculate_average_skill_level(bot.leveling_data, selected_profile, player_uuid)
-        if average_level is not None:
-            await bot._send_message(ctx,
-                                 f"{target_ign}'s Skill Average in profile '{profile_name}' is approximately {average_level:.2f}.")
+        member_data = selected_profile.get('members', {}).get(player_uuid)
+        if not member_data:
+            await bot._send_message(ctx, f"Could not find member data for '{target_ign}' in profile '{profile_name}'.")
+            return
+
+        experience_data = member_data.get('player_data', {}).get('experience', {})
+        skill_levels = []
+        total_level = 0
+        skills_counted = 0
+
+        for skill_name in AVERAGE_SKILLS_LIST:
+            xp_field = f'SKILL_{skill_name.upper()}'
+            skill_xp = experience_data.get(xp_field, 0)
+            level = calculate_skill_level(bot.leveling_data, skill_xp, skill_name, member_data)
+            total_level += level
+            skills_counted += 1
+            skill_levels.append(f"{skill_name.capitalize()} {level:.2f}")
+
+        if skills_counted > 0:
+            average_level = total_level / skills_counted
+            skills_str = " | ".join(skill_levels)
+            await bot._send_message(ctx, f"{target_ign}'s skill levels (SA {average_level:.2f}) {skills_str}")
         else:
-            await bot._send_message(ctx,
-                                 f"Could not calculate skill level for '{target_ign}' in profile '{profile_name}'. Skill data might be missing.")
+            await bot._send_message(ctx, f"Could not calculate skill level for '{target_ign}' in profile '{profile_name}'. Skill data might be missing.")
     except Exception as e:
         print(f"[ERROR][SkillsCmd] Unexpected error calculating skills: {e}")
         traceback.print_exc()
