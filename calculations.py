@@ -119,27 +119,17 @@ def calculate_hotm_level(leveling_data: LevelingData, xp: float) -> float:
 
         if xp >= total_xp_required:
             level += 1
-            # print(f"[DEBUG][Calc][HotM] -> Level {level_num_being_checked} COMPLETED. Current full level: {level}") # Removed
         else:
-            # print(f"[DEBUG][Calc][HotM] -> Level {level_num_being_checked} NOT completed. Calculating progress...") # Removed
-            # Calculate progress within the current level
             xp_in_level = xp - current_level_xp_threshold
             xp_needed_for_level = required_xp # This is the amount for the current level (i)
-            # print(f"[DEBUG][Calc][HotM]    XP Threshold for this level: {current_level_xp_threshold:,.0f}") # Removed
-            # print(f"[DEBUG][Calc][HotM]    XP into this level: {xp_in_level:,.0f}") # Removed
-            # print(f"[DEBUG][Calc][HotM]    XP needed for this level: {xp_needed_for_level:,.0f}") # Removed
+
             if xp_needed_for_level > 0:
                 progress = xp_in_level / xp_needed_for_level
                 final_level = level + progress
-                # print(f"[DEBUG][Calc][HotM]    Progress: {progress:.4f}") # Removed
-                # print(f"[DEBUG][Calc][HotM]    Final Calculated Level: {final_level:.4f}") # Removed
                 return final_level
             else: # Avoid division by zero
-                # print(f"[DEBUG][Calc][HotM]    XP needed for level is 0. Returning integer level: {level}") # Removed
                 return float(level)
 
-    # If loop completes, player has exactly reached a level threshold
-    # print(f"[DEBUG][Calc][HotM] Loop completed. Returning integer level: {level}") # Removed
     return float(level)
 
 

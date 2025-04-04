@@ -41,12 +41,16 @@ async def process_overflow_skill_command(ctx: commands.Context, ign: str | None,
     data = await bot._get_player_profile_data(ctx, ign, requested_profile_name)
     if not data:
         return
-    _, uuid, profile = data
+    target_ign, uuid, profile = data
+    profile_name = profile.get('cute_name', 'Unknown')
     member = profile.get('members', {}).get(uuid, {})
     if not member:
         return
     experience = member.get('player_data', {}).get('experience', {})
     skill_text = []
+    total_skill_level = 0.0
+    num_skills = 0
+    
     for skill in AVERAGE_SKILLS_LIST:
         provider = XPProvider(leveling_data['xp_table'],
                               None)  # leveling_data['level_caps'].get(skill, 50)
@@ -59,5 +63,21 @@ async def process_overflow_skill_command(ctx: commands.Context, ign: str | None,
                 break
             achieved_level = level
             current_xp -= xp
-        skill_text += [f'{skill.title()} {achieved_level + current_xp / required_next_xp:.2f}']
-    await ctx.reply(' | '.join(skill_text))
+            
+        # Calculate the decimal level
+        decimal_level = achieved_level + (current_xp / required_next_xp if required_next_xp > 0 else 0)
+        
+        # Add to total for average calculation
+        total_skill_level += decimal_level
+        num_skills += 1
+        
+        skill_text += [f'{skill.title()} {decimal_level:.2f}']
+    
+    # Calculate average
+    average_skill_level = total_skill_level / num_skills if num_skills > 0 else 0
+    
+    # Format the output message with the new format
+    skills_str = ' | '.join(skill_text)
+    output_message = f"{target_ign}'s overflow skill levels (SA {average_skill_level:.2f}) {skills_str}"
+    
+    await bot._send_message(ctx, output_message)
