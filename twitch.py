@@ -22,6 +22,7 @@ from utils import _find_latest_profile, _get_uuid_from_ign, _get_skyblock_data
 from commands.kuudra import KuudraCommand
 from commands.auction_house import process_auctions_command
 from commands.cata import process_dungeon_command
+from commands.sblvl import process_sblvl_command
 
 
 def _select_profile(profiles: list[Profile], player_uuid: str, requested_profile_name: str | None) -> Profile | None:
@@ -320,27 +321,7 @@ class Bot(commands.Bot):
         if ign is None:
             return
 
-        profile_data = await self._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
-        if not profile_data:
-            return
-
-        target_ign, player_uuid, selected_profile = profile_data
-        profile_name = selected_profile.get('cute_name', 'Unknown')
-
-        try:
-            member_data = selected_profile.get('members', {}).get(player_uuid, {})
-            leveling_data = member_data.get('leveling', {})
-            sb_xp = leveling_data.get('experience', 0) # This is total profile XP, not level XP
-
-            # Calculate level by dividing XP by 100 as specifically requested
-            sb_level = sb_xp / 100.0
-
-            await self._send_message(ctx, f"{target_ign}'s SkyBlock level in profile '{profile_name}' is {sb_level:.2f}.")
-
-        except Exception as e:
-            print(f"[ERROR][SblvlCmd] Unexpected error processing level data: {e}")
-            traceback.print_exc()
-            await self._send_message(ctx, "An unexpected error occurred while fetching SkyBlock level.")
+        await process_sblvl_command(ctx, ign, requested_profile_name=requested_profile_name)
 
     @commands.command(name='classaverage', aliases=['ca'])
     async def classaverage_command(self, ctx: commands.Context, *, args: str | None = None):

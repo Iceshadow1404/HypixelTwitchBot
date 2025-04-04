@@ -1,8 +1,10 @@
 import json
+import os
 import traceback
 from typing import TypedDict
 
 import aiohttp
+from dotenv import load_dotenv
 
 import constants
 
@@ -122,10 +124,13 @@ async def _get_skyblock_data(hypixel_api_key, uuid: str) -> list | None:
                     data = json.loads(response_text)
                     # Save the full response for debugging
                     debug_file = f"hypixel_response_{uuid}.json"
+                    load_dotenv()
+                    DEBUG = os.getenv("Debug", "false").strip().lower() == "true"
                     try:
-                        with open(debug_file, 'w', encoding='utf-8') as f:
-                            json.dump(data, f, indent=4)
-                        print(f"[DEBUG][API] Hypixel response saved to '{debug_file}'.")
+                        if DEBUG:
+                            with open(debug_file, 'w', encoding='utf-8') as f:
+                                json.dump(data, f, indent=4)
+                            print(f"[DEBUG][API] Hypixel response saved to '{debug_file}'.")
                     except IOError as io_err:
                         print(f"[WARN][API] Failed to save debug file '{debug_file}': {io_err}")
 
