@@ -19,6 +19,7 @@ from commands.overflow_skills import process_overflow_skill_command
 from commands.skills import process_skills_command
 from profiletyping import Profile
 from utils import _find_latest_profile, _get_uuid_from_ign, _get_skyblock_data
+from commands.kuudra import KuudraCommand
 
 
 def _select_profile(profiles: list[Profile], player_uuid: str, requested_profile_name: str | None) -> Profile | None:
@@ -60,11 +61,13 @@ class Bot(commands.Bot):
     """
     Twitch Bot for interacting with Hypixel SkyBlock API and providing commands.
     """
-    def __init__(self, token: str, prefix: str, nickname: str, initial_channels: list[str], hypixel_api_key: str | None):
+    def __init__(self, token: str, prefix: str, nickname: str, initial_channels: list[str], hypixel_api_key: str | None = None):
         """Initializes the Bot."""
         self.start_time = datetime.now()
         self.hypixel_api_key = hypixel_api_key
-        self.leveling_data = utils._load_leveling_data()
+        self.leveling_data = {}
+        self.constants = constants
+        self._kuudra_command = KuudraCommand(self)
         # Store initial channels from .env for later reference if needed
         self._initial_env_channels = initial_channels 
 
@@ -262,60 +265,7 @@ class Bot(commands.Bot):
         """Shows Kuudra completions for different tiers and calculates a score.
         Syntax: #kuudra <username> [profile_name]
         """
-        ign: str | None = None
-        requested_profile_name: str | None = None
-
-        if not args:
-            ign = ctx.author.name
-        else:
-            parts = args.split()
-            ign = parts[0]
-            if len(parts) > 1:
-                requested_profile_name = parts[1]
-            if len(parts) > 2:
-                await self._send_message(ctx, f"Too many arguments. Usage: {self._prefix}kuudra <username> [profile_name]")
-                return
-
-        profile_data = await self._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
-        if not profile_data:
-            return # Error message already sent by helper
-
-        target_ign, player_uuid, selected_profile = profile_data
-        profile_name = selected_profile.get('cute_name', 'Unknown')
-
-        try:
-            member_data = selected_profile.get('members', {}).get(player_uuid, {})
-            nether_island_data = member_data.get('nether_island_player_data', None) # Check for None first
-
-            if nether_island_data is None:
-                 # Don't send a message here, rely on the underlying send issue being the problem
-                 # await self._send_message(ctx, f"'{target_ign}' has no Kuudra data available (missing nether island data) in profile '{profile_name}'.")
-                 print(f"[INFO][KuudraCmd] No nether_island_player_data found for {target_ign} in profile {profile_name}.")
-                 return
-
-            kuudra_completed_tiers = nether_island_data.get('kuudra_completed_tiers', None) # Check for None
-
-            if kuudra_completed_tiers is None or not kuudra_completed_tiers: # Check for None or empty dict
-                # Don't send a message here
-                # await self._send_message(ctx, f"'{target_ign}' has no Kuudra completions recorded in profile '{profile_name}'.")
-                print(f"[INFO][KuudraCmd] No Kuudra completions recorded for {target_ign} in profile {profile_name}.")
-                return
-
-            # Format output
-            completions = []
-            total_score = 0
-            for tier in constants.KUUDRA_TIERS_ORDER:
-                count = kuudra_completed_tiers.get(tier, 0)
-                tier_name = 'basic' if tier == 'none' else tier # Rename 'none' to 'basic'
-                completions.append(f"{tier_name} {count}")
-                total_score += count * constants.KUUDRA_TIER_POINTS.get(tier, 0) # Use .get for safety
-
-            await self._send_message(ctx, f"{target_ign}'s Kuudra completions in profile '{profile_name}': {', '.join(completions)} | Score: {total_score:,}")
-
-        except Exception as e:
-            print(f"[ERROR][KuudraCmd] Unexpected error processing Kuudra data: {e}")
-            traceback.print_exc()
-            await self._send_message(ctx, "An unexpected error occurred while fetching Kuudra completions.")
+        await self._kuudra_command.kuudra_command(ctx, args=args)
 
     @commands.command(name='oskill', aliases=['skillo', 'oskills', 'skillso', 'overflow'])
     async def skill_command(self, ctx: commands.Context, *, args: str | None = None):
