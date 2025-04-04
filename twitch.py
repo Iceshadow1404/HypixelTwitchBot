@@ -23,6 +23,7 @@ from commands.kuudra import KuudraCommand
 from commands.auction_house import process_auctions_command
 from commands.cata import process_dungeon_command
 from commands.sblvl import process_sblvl_command
+from commands.currdungeon import process_currdungeon_command
 
 
 def _select_profile(profiles: list[Profile], player_uuid: str, requested_profile_name: str | None) -> Profile | None:
@@ -266,9 +267,6 @@ class Bot(commands.Bot):
 
     @commands.command(name='skills')
     async def skills_command(self, ctx: commands.Context, *, args: str | None = None):
-        """Shows the average SkyBlock skill level for a player.
-        Syntax: #skills <username> [profile_name]
-        """
         ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'skills')
         if ign is None:
             return
@@ -277,16 +275,10 @@ class Bot(commands.Bot):
 
     @commands.command(name='kuudra')
     async def kuudra_command(self, ctx: commands.Context, *, args: str | None = None):
-        """Shows Kuudra completions for different tiers and calculates a score.
-        Syntax: #kuudra <username> [profile_name]
-        """
         await self._kuudra_command.kuudra_command(ctx, args=args)
 
     @commands.command(name='oskill', aliases=['skillo', 'oskills', 'skillso', 'overflow'])
     async def skill_command(self, ctx: commands.Context, *, args: str | None = None):
-        """Shows the overflow skill details for a player.
-        Syntax: #oskill <username> [profile_name]
-        """
         ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'oskill')
         if ign is None:
             return
@@ -296,16 +288,10 @@ class Bot(commands.Bot):
 
     @commands.command(name='auctions', aliases=['ah'])
     async def auctions_command(self, ctx: commands.Context, *, ign: str | None = None):
-        """Shows active auctions for a player, limited by character count.
-           This command currently DOES NOT support profile selection.
-        """
         await process_auctions_command(ctx, ign)
 
     @commands.command(name='dungeon', aliases=['dungeons', 'cata'])
     async def dungeon_command(self, ctx: commands.Context, *, args: str | None = None):
-        """Shows the player's Catacombs level and XP.
-        Syntax: #dungeon <username> [profile_name]
-        """
         ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'dungeon')
         if ign is None:
             return
@@ -314,9 +300,6 @@ class Bot(commands.Bot):
 
     @commands.command(name='sblvl')
     async def sblvl_command(self, ctx: commands.Context, *, args: str | None = None):
-        """Shows the player's SkyBlock level (based on XP/100).
-        Syntax: #sblvl <username> [profile_name]
-        """
         ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'sblvl')
         if ign is None:
             return
@@ -325,9 +308,6 @@ class Bot(commands.Bot):
 
     @commands.command(name='classaverage', aliases=['ca'])
     async def classaverage_command(self, ctx: commands.Context, *, args: str | None = None):
-        """Shows the player's dungeon class levels and their average.
-        Syntax: #ca <username> [profile_name]
-        """
         ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'ca')
         if ign is None:
             return
@@ -378,7 +358,6 @@ class Bot(commands.Bot):
 
     @commands.command(name='mayor')
     async def mayor_command(self, ctx: commands.Context):
-        """Shows the current SkyBlock Mayor and Minister."""
         if not self.hypixel_api_key:
             await ctx.send("Hypixel API Key is not configured.")
             return
@@ -430,9 +409,6 @@ class Bot(commands.Bot):
 
     @commands.command(name='bank', aliases=['purse', 'money'])
     async def bank_command(self, ctx: commands.Context, *, args: str | None = None):
-        """Shows the player's bank, purse, and personal bank balance.
-        Syntax: #bank <username> [profile_name]
-        """
         ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'bank')
         if ign is None:
             return
@@ -474,9 +450,6 @@ class Bot(commands.Bot):
 
     @commands.command(name='nucleus')
     async def nucleus_command(self, ctx: commands.Context, *, args: str | None = None):
-        """Shows the calculated Nucleus runs based on placed crystals.
-        Syntax: #nucleus <username> [profile_name]
-        """
         ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'nucleus')
         if ign is None:
             return
@@ -514,9 +487,6 @@ class Bot(commands.Bot):
 
     @commands.command(name='hotm')
     async def hotm_command(self, ctx: commands.Context, *, args: str | None = None):
-        """Shows the player's Heart of the Mountain level.
-        Syntax: #hotm <username> [profile_name]
-        """
         ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'hotm')
         if ign is None:
             return
@@ -543,9 +513,6 @@ class Bot(commands.Bot):
 
     @commands.command(name='essence')
     async def essence_command(self, ctx: commands.Context, *, args: str | None = None):
-        """Shows the player's essence amounts.
-        Syntax: #essence <username> [profile_name]
-        """
         ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'essence')
         if ign is None:
             return
@@ -592,9 +559,6 @@ class Bot(commands.Bot):
 
     @commands.command(name='powder')
     async def powder_command(self, ctx: commands.Context, *, args: str | None = None):
-        """Shows the player's current and total Mithril and Gemstone powder.
-        Syntax: #powder <username> [profile_name]
-        """
         ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'powder')
         if ign is None:
             return
@@ -638,9 +602,6 @@ class Bot(commands.Bot):
 
     @commands.command(name='slayer')
     async def slayer_command(self, ctx: commands.Context, *, args: str | None = None):
-        """Shows the player's slayer levels.
-        Syntax: #slayer <username> [profile_name]
-        """
         ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'slayer')
         if ign is None:
             return
@@ -682,25 +643,21 @@ class Bot(commands.Bot):
 
     @commands.command(name='networth', aliases=["nw"])
     async def networth_command(self, ctx: commands.Context, *, ign: str | None = None):
-        """Informs the user that networth calculation is not supported and suggests alternatives."""
         await self._send_message(ctx, "Networth calculation is not supported. Please use mods like NEU or SkyHelper for accurate networth calculations.")
 
     @commands.command(name='dexter')
     async def dexter_command(self, ctx: commands.Context):
-        """Hidden command that responds with a skill issue confirmation."""
         await self._send_message(ctx, "YEP skill issue confirmed!")
     dexter_command.hidden = True
 
     @commands.command(name='dongo')
     async def dexter_command(self, ctx: commands.Context):
-        """Hidden command that responds with a skill issue confirmation."""
         await self._send_message(ctx, "🥚")
 
     dexter_command.hidden = True
 
     @commands.command(name='help')
     async def help_command(self, ctx: commands.Context):
-        """Shows this help message listing all available commands."""
         print(f"[COMMAND] Help command triggered by {ctx.author.name} in #{ctx.channel.name}")
         prefix = self._prefix # Get the bot's prefix
         
@@ -733,10 +690,6 @@ class Bot(commands.Bot):
 
     @commands.command(name='rtca')
     async def rtca_command(self, ctx: commands.Context, *, args: str | None = None):
-        """Estimates M6/M7 runs needed for a target class average using simulation.
-        Syntax: #rtca <username> [profile_name] [target_ca=50] [floor=m7]
-        Simulates runs considering 100% active XP / 25% passive XP.
-        """
         print(f"[COMMAND] Rtca command triggered by {ctx.author.name}: {args}")
 
         # --- 1. Argument Parsing ---
@@ -990,121 +943,14 @@ class Bot(commands.Bot):
 
     @commands.command(name='currdungeon')
     async def currdungeon_command(self, ctx: commands.Context, *, args: str | None = None):
-        """Checks if a player finished a dungeon run in the last 10 minutes.
-        Syntax: #currdungeon <username> [profile_name]
-        """
-        print(f"[COMMAND] CurrDungeon command triggered by {ctx.author.name}: {args}")
+        ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'currdungeon')
+        if ign is None:
+            return
 
-        # --- 1. Argument Parsing ---
-        ign: str | None = None
-        requested_profile_name: str | None = None
-
-        if not args:
-            ign = ctx.author.name  # Default to message author if no args provided
-        else:
-            parts = args.split()
-            ign = parts[0]
-            if len(parts) > 1:
-                requested_profile_name = parts[1]
-            if len(parts) > 2:
-                await self._send_message(ctx, f"Too many arguments. Usage: {self._prefix}currdungeon <username> [profile_name]")
-                return
-
-        # Clean up the IGN
-        ign = ign.lstrip('@')  # Remove potential @ prefix
-        print(f"[INFO][CurrDungeonCmd] Target player: {ign}")
-        # -----------------------------
-
-        # --- 2. Fetch Player Profile ---
-        profile_data = await self._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
-        if not profile_data:
-            return  # Error message already sent by helper
-        target_ign, player_uuid, selected_profile = profile_data
-        profile_name = selected_profile.get('cute_name', 'Unknown')
-        # -----------------------------
-
-        try:
-            # --- 3. Find Latest Run ---
-            member_data = selected_profile.get('members', {}).get(player_uuid, {})
-            dungeons_data = member_data.get('dungeons', {})
-            treasures_data = dungeons_data.get('treasures', None)
-            runs_list = treasures_data.get('runs', []) if treasures_data else []  # Default to empty list
-
-            if not runs_list:
-                print(f"[INFO][CurrDungeonCmd] No runs found for {target_ign} in profile {profile_name}.")
-                await self._send_message(ctx, f"'{target_ign}' has no recorded dungeon runs in profile '{profile_name}'.")
-                return
-
-            latest_run = None
-            max_ts = 0
-            for run in runs_list:
-                if isinstance(run, dict):
-                    current_ts = run.get('completion_ts', 0)
-                    if isinstance(current_ts, (int, float)) and current_ts > max_ts:
-                        max_ts = current_ts
-                        latest_run = run
-
-            if latest_run is None:
-                print(f"[INFO][CurrDungeonCmd] Could not determine the latest run for {target_ign} (no valid timestamps).")
-                await self._send_message(ctx, f"Could not find a valid latest run for '{target_ign}' in profile '{profile_name}'.")
-                return
-            # -----------------------------
-
-            # --- 4. Check Run Recency ---
-            completion_timestamp_ms = latest_run.get('completion_ts', 0)
-            current_time_sec = datetime.now().timestamp()
-            completion_time_sec = completion_timestamp_ms / 1000.0
-            time_diff_sec = current_time_sec - completion_time_sec
-
-            print(f"[DEBUG][CurrDungeonCmd] Latest Run TS: {completion_time_sec}, Current TS: {current_time_sec}, Diff: {time_diff_sec:.2f} sec")
-
-            if time_diff_sec > 600:  # More than 10 minutes
-                await self._send_message(ctx, f"{target_ign} didn't finish a run in the last 10min.")
-                return
-            # -----------------------------
-
-            # --- 5. Format Output for Recent Run ---
-            # Format relative time
-            relative_time_str = self._format_relative_time(time_diff_sec)
-
-            # Format run type
-            dungeon_type = latest_run.get('dungeon_type', 'Unknown Type')
-            dungeon_tier = latest_run.get('dungeon_tier', '?')
-            run_info = self._format_run_type(dungeon_type, dungeon_tier)
-
-            # Format teammates
-            participants_data = latest_run.get('participants', [])
-            teammate_strings = []
-            target_ign_lower = target_ign.lower()  # Lowercase for comparison
-            if isinstance(participants_data, list):
-                for participant in participants_data:
-                    if isinstance(participant, dict):
-                        raw_name = participant.get('display_name')
-                        if raw_name:
-                            parsed_teammate = self._parse_participant(raw_name, target_ign_lower)
-                            if parsed_teammate:  # Add only if parsing succeeded and it's not the target player
-                                teammate_strings.append(parsed_teammate)
-
-            teammates_str = ", ".join(teammate_strings) if teammate_strings else "No other participants listed"
-
-            # Construct final message
-            output_message = (
-                f"{target_ign}'s last run was {run_info} finished {relative_time_str}. "
-                f"Teammates: {teammates_str}"
-            )
-            await self._send_message(ctx, output_message)
-            # -----------------------------
-
-        except Exception as e:
-            print(f"[ERROR][CurrDungeonCmd] Unexpected error processing current run for {target_ign}: {e}")
-            traceback.print_exc()
-            await self._send_message(ctx, f"An unexpected error occurred while checking the current run for '{target_ign}'.")
+        await process_currdungeon_command(ctx, ign, requested_profile_name=requested_profile_name)
 
     @commands.command(name='runstillcata')
     async def runstillcata_command(self, ctx: commands.Context, *, args: str | None = None):
-        """Shows how many M6/M7 runs are needed until the next Catacombs level.
-        Syntax: #runstillcata <username> [profile_name] [target_level] [floor=m7]
-        """
         print(f"[COMMAND] RunsTillCata command triggered by {ctx.author.name}: {args}")
 
         # --- 1. Argument Parsing ---
@@ -1230,63 +1076,7 @@ class Bot(commands.Bot):
         await super().close()
         print("[INFO] Bot connection closed.")
 
-    # --- Helper Methods (Add these within the TwitchCog class) ---
-
-    def _format_relative_time(self, time_diff_sec: float) -> str:
-        """Formats a time difference in seconds into 'X seconds/minutes ago'."""
-        if time_diff_sec < 60:
-            seconds_ago = round(time_diff_sec)
-            # Handle pluralization correctly
-            return f"{seconds_ago} second{'s' if seconds_ago != 1 else ''} ago"
-        else:
-            minutes_ago = math.floor(time_diff_sec / 60)
-            # Handle pluralization correctly
-            return f"{minutes_ago} minute{'s' if minutes_ago != 1 else ''} ago"
-
-    def _format_run_type(self, dungeon_type: str, dungeon_tier: str | int) -> str:
-        """Formats dungeon type and tier into F{tier} or M{tier}."""
-        dtype_lower = dungeon_type.lower()
-        if dtype_lower == 'catacombs':
-            return f"F{dungeon_tier}"
-        elif dtype_lower == 'master_catacombs':
-            return f"M{dungeon_tier}"
-        else:
-            # Fallback for unexpected dungeon types
-            return f"{dungeon_type.capitalize()} {dungeon_tier}"
-
-    def _parse_participant(self, raw_display_name: str, target_ign_lower: str) -> str | None:
-        """Parses participant display name, cleans it, and extracts info.
-        Returns 'Username (Class Level)' or None if it's the target player or parsing fails."""
-        try:
-            # 1. Remove color codes
-            cleaned_name = re.sub(r'§[0-9a-fk-or]', '', raw_display_name)
-            # 2. Split username and class info
-            parts = cleaned_name.split(':', 1)
-            username_part = parts[0].strip()
-
-            # 3. Skip the target player themselves (case-insensitive)
-            if username_part.lower() == target_ign_lower:
-                return None
-
-            # 4. Extract Class Name and Level (if available)
-            final_class = 'Unknown'
-            final_level = '?'
-            if len(parts) > 1:
-                class_info_part = parts[1].strip() # e.g., "Tank (50)"
-                class_match = re.match(r'^([a-zA-Z]+)', class_info_part)
-                if class_match:
-                    final_class = class_match.group(1)
-                level_match = re.search(r'\((\d+)\)', class_info_part)
-                if level_match:
-                    final_level = level_match.group(1)
-
-            if username_part:
-                return f"{username_part} ({final_class} {final_level})"
-            else:
-                return None # Return None if username part is empty after cleaning
-        except Exception as e:
-            print(f"[WARN][CurrDungeon] Error parsing participant '{raw_display_name}': {e}")
-            return None # Return None on any parsing error
+    # --- Helper Methods (for Stream Monitoring) ---
 
     async def _fetch_live_hypixel_streamers(self) -> list[str] | None:
         """Fetches live Minecraft streams, filters for Hypixel SkyBlock, and returns a list of usernames."""
