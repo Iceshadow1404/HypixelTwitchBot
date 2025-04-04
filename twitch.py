@@ -59,6 +59,28 @@ def _select_profile(profiles: list[Profile], player_uuid: str, requested_profile
     return latest_profile
 
 
+def _parse_command_args(args: str | None, ctx: commands.Context, prefix: str, command_name: str) -> tuple[str, str | None]:
+    """Helper function to parse command arguments.
+    Returns a tuple of (username, profile_name).
+    Handles error messaging if there are too many arguments.
+    """
+    ign: str | None = None
+    requested_profile_name: str | None = None
+
+    if not args:
+        ign = ctx.author.name
+    else:
+        parts = args.split()
+        ign = parts[0]
+        if len(parts) > 1:
+            requested_profile_name = parts[1]
+        if len(parts) > 2:
+            ctx.bot._send_message(ctx, f"Too many arguments. Usage: {prefix}{command_name} <username> [profile_name]")
+            return None, None
+
+    return ign, requested_profile_name
+
+
 class Bot(commands.Bot):
     """
     Twitch Bot for interacting with Hypixel SkyBlock API and providing commands.
@@ -246,19 +268,9 @@ class Bot(commands.Bot):
         """Shows the average SkyBlock skill level for a player.
         Syntax: #skills <username> [profile_name]
         """
-        ign: str | None = None
-        requested_profile_name: str | None = None
-
-        if not args:
-            ign = ctx.author.name
-        else:
-            parts = args.split()
-            ign = parts[0]
-            if len(parts) > 1:
-                requested_profile_name = parts[1]
-            if len(parts) > 2:
-                await self._send_message(ctx, f"Too many arguments. Usage: {self._prefix}skills <username> [profile_name]")
-                return
+        ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'skills')
+        if ign is None:
+            return
 
         await process_skills_command(ctx, ign, requested_profile_name=requested_profile_name)
 
@@ -274,19 +286,9 @@ class Bot(commands.Bot):
         """Shows the overflow skill details for a player.
         Syntax: #oskill <username> [profile_name]
         """
-        ign: str | None = None
-        requested_profile_name: str | None = None
-
-        if not args:
-            ign = ctx.author.name
-        else:
-            parts = args.split()
-            ign = parts[0]
-            if len(parts) > 1:
-                requested_profile_name = parts[1]
-            if len(parts) > 2:
-                await self._send_message(ctx, f"Too many arguments. Usage: {self._prefix}oskill <username> [profile_name]")
-                return
+        ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'oskill')
+        if ign is None:
+            return
 
         # Call the separate processing function, passing the profile name
         await process_overflow_skill_command(ctx, ign, requested_profile_name=requested_profile_name)
@@ -303,19 +305,9 @@ class Bot(commands.Bot):
         """Shows the player's Catacombs level and XP.
         Syntax: #dungeon <username> [profile_name]
         """
-        ign: str | None = None
-        requested_profile_name: str | None = None
-
-        if not args:
-            ign = ctx.author.name
-        else:
-            parts = args.split()
-            ign = parts[0]
-            if len(parts) > 1:
-                requested_profile_name = parts[1]
-            if len(parts) > 2:
-                await self._send_message(ctx, f"Too many arguments. Usage: {self._prefix}dungeon <username> [profile_name]")
-                return
+        ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'dungeon')
+        if ign is None:
+            return
 
         await process_dungeon_command(ctx, ign, requested_profile_name=requested_profile_name)
 
@@ -324,19 +316,9 @@ class Bot(commands.Bot):
         """Shows the player's SkyBlock level (based on XP/100).
         Syntax: #sblvl <username> [profile_name]
         """
-        ign: str | None = None
-        requested_profile_name: str | None = None
-
-        if not args:
-            ign = ctx.author.name
-        else:
-            parts = args.split()
-            ign = parts[0]
-            if len(parts) > 1:
-                requested_profile_name = parts[1]
-            if len(parts) > 2:
-                await self._send_message(ctx, f"Too many arguments. Usage: {self._prefix}sblvl <username> [profile_name]")
-                return
+        ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'sblvl')
+        if ign is None:
+            return
 
         profile_data = await self._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
         if not profile_data:
@@ -365,19 +347,9 @@ class Bot(commands.Bot):
         """Shows the player's dungeon class levels and their average.
         Syntax: #ca <username> [profile_name]
         """
-        ign: str | None = None
-        requested_profile_name: str | None = None
-
-        if not args:
-            ign = ctx.author.name
-        else:
-            parts = args.split()
-            ign = parts[0]
-            if len(parts) > 1:
-                requested_profile_name = parts[1]
-            if len(parts) > 2:
-                await self._send_message(ctx, f"Too many arguments. Usage: {self._prefix}ca <username> [profile_name]")
-                return
+        ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'ca')
+        if ign is None:
+            return
 
         profile_data = await self._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
         if not profile_data:
@@ -480,19 +452,9 @@ class Bot(commands.Bot):
         """Shows the player's bank, purse, and personal bank balance.
         Syntax: #bank <username> [profile_name]
         """
-        ign: str | None = None
-        requested_profile_name: str | None = None
-
-        if not args:
-            ign = ctx.author.name
-        else:
-            parts = args.split()
-            ign = parts[0]
-            if len(parts) > 1:
-                requested_profile_name = parts[1]
-            if len(parts) > 2:
-                await self._send_message(ctx, f"Too many arguments. Usage: {self._prefix}bank <username> [profile_name]")
-                return
+        ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'bank')
+        if ign is None:
+            return
 
         profile_data = await self._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
         if not profile_data:
@@ -534,19 +496,9 @@ class Bot(commands.Bot):
         """Shows the calculated Nucleus runs based on placed crystals.
         Syntax: #nucleus <username> [profile_name]
         """
-        ign: str | None = None
-        requested_profile_name: str | None = None
-
-        if not args:
-            ign = ctx.author.name
-        else:
-            parts = args.split()
-            ign = parts[0]
-            if len(parts) > 1:
-                requested_profile_name = parts[1]
-            if len(parts) > 2:
-                await self._send_message(ctx, f"Too many arguments. Usage: {self._prefix}nucleus <username> [profile_name]")
-                return
+        ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'nucleus')
+        if ign is None:
+            return
 
         profile_data = await self._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
         if not profile_data:
@@ -584,19 +536,9 @@ class Bot(commands.Bot):
         """Shows the player's Heart of the Mountain level.
         Syntax: #hotm <username> [profile_name]
         """
-        ign: str | None = None
-        requested_profile_name: str | None = None
-
-        if not args:
-            ign = ctx.author.name
-        else:
-            parts = args.split()
-            ign = parts[0]
-            if len(parts) > 1:
-                requested_profile_name = parts[1]
-            if len(parts) > 2:
-                await self._send_message(ctx, f"Too many arguments. Usage: {self._prefix}hotm <username> [profile_name]")
-                return
+        ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'hotm')
+        if ign is None:
+            return
 
         profile_data = await self._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
         if not profile_data:
@@ -623,19 +565,9 @@ class Bot(commands.Bot):
         """Shows the player's essence amounts.
         Syntax: #essence <username> [profile_name]
         """
-        ign: str | None = None
-        requested_profile_name: str | None = None
-
-        if not args:
-            ign = ctx.author.name
-        else:
-            parts = args.split()
-            ign = parts[0]
-            if len(parts) > 1:
-                requested_profile_name = parts[1]
-            if len(parts) > 2:
-                await self._send_message(ctx, f"Too many arguments. Usage: {self._prefix}essence <username> [profile_name]")
-                return
+        ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'essence')
+        if ign is None:
+            return
 
         profile_data = await self._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
         if not profile_data:
@@ -682,19 +614,9 @@ class Bot(commands.Bot):
         """Shows the player's current and total Mithril and Gemstone powder.
         Syntax: #powder <username> [profile_name]
         """
-        ign: str | None = None
-        requested_profile_name: str | None = None
-
-        if not args:
-            ign = ctx.author.name
-        else:
-            parts = args.split()
-            ign = parts[0]
-            if len(parts) > 1:
-                requested_profile_name = parts[1]
-            if len(parts) > 2:
-                await self._send_message(ctx, f"Too many arguments. Usage: {self._prefix}powder <username> [profile_name]")
-                return
+        ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'powder')
+        if ign is None:
+            return
 
         profile_data = await self._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
         if not profile_data:
@@ -738,19 +660,9 @@ class Bot(commands.Bot):
         """Shows the player's slayer levels.
         Syntax: #slayer <username> [profile_name]
         """
-        ign: str | None = None
-        requested_profile_name: str | None = None
-
-        if not args:
-            ign = ctx.author.name
-        else:
-            parts = args.split()
-            ign = parts[0]
-            if len(parts) > 1:
-                requested_profile_name = parts[1]
-            if len(parts) > 2:
-                await self._send_message(ctx, f"Too many arguments. Usage: {self._prefix}slayer <username> [profile_name]")
-                return
+        ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'slayer')
+        if ign is None:
+            return
 
         profile_data = await self._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
         if not profile_data:
