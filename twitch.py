@@ -80,7 +80,7 @@ def _parse_command_args(args: str | None, ctx: commands.Context, prefix: str, co
             ctx.bot._send_message(ctx, f"Too many arguments. Usage: {prefix}{command_name} <username> [profile_name]")
             return None, None
 
-    return ign, requested_profile_name
+    return ign.rstrip(), requested_profile_name
 
 
 class Bot(commands.Bot):
@@ -278,12 +278,10 @@ class Bot(commands.Bot):
         await self._kuudra_command.kuudra_command(ctx, args=args)
 
     @commands.command(name='oskill', aliases=['skillo', 'oskills', 'skillso', 'overflow'])
-    async def skill_command(self, ctx: commands.Context, *, args: str | None = None):
+    async def overflow_skill_command(self, ctx: commands.Context, *, args: str | None = None):
         ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'oskill')
         if ign is None:
             return
-
-        # Call the separate processing function, passing the profile name
         await process_overflow_skill_command(ctx, ign, requested_profile_name=requested_profile_name)
 
     @commands.command(name='auctions', aliases=['ah'])
@@ -700,6 +698,7 @@ class Bot(commands.Bot):
 
         if not args:
             ign = ctx.author.name # Default to message author if no args provided
+            ign = ign.rstrip()
             print(f"[DEBUG][RtcaCmd] No arguments provided, defaulting IGN to: {ign}")
         else:
             parts = args.split()
