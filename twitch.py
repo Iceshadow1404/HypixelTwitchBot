@@ -25,11 +25,11 @@ from commands.cata import process_dungeon_command
 from commands.sblvl import process_sblvl_command
 from commands.currdungeon import process_currdungeon_command
 from commands.classaverage import ClassAverageCommand
+from commands.mayor import MayorCommand
 
 
 def _select_profile(profiles: list[Profile], player_uuid: str, requested_profile_name: str | None) -> Profile | None:
     """Selects a profile from a list based on requested cute_name or falls back to the latest."""
-    # profile_list = list(profiles.values()) # Error: profiles is already a list
 
     # Try to find by cute_name if requested
     if requested_profile_name:
@@ -63,10 +63,6 @@ def _select_profile(profiles: list[Profile], player_uuid: str, requested_profile
 
 
 def _parse_command_args(args: str | None, ctx: commands.Context, prefix: str, command_name: str) -> tuple[str, str | None]:
-    """Helper function to parse command arguments.
-    Returns a tuple of (username, profile_name).
-    Handles error messaging if there are too many arguments.
-    """
     ign: str | None = None
     requested_profile_name: str | None = None
 
@@ -96,7 +92,7 @@ class Bot(commands.Bot):
         self.constants = constants
         self._kuudra_command = KuudraCommand(self)
         self._classaverage_command = ClassAverageCommand(self)
-        # Store initial channels from .env for later reference if needed
+        self._mayor_command = MayorCommand(self)
         self._initial_env_channels = initial_channels 
 
         # Initialize bot with only channels from .env first
@@ -312,54 +308,7 @@ class Bot(commands.Bot):
 
     @commands.command(name='mayor')
     async def mayor_command(self, ctx: commands.Context):
-        if not self.hypixel_api_key:
-            await ctx.send("Hypixel API Key is not configured.")
-            return
-
-        print(f"[DEBUG][API] Fetching SkyBlock election data from {constants.HYPIXEL_ELECTION_URL}")
-        # await ctx.send("Fetching current SkyBlock Mayor...") # Removed initial message
-
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(constants.HYPIXEL_ELECTION_URL) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        if data.get("success"):
-                            mayor_data = data.get('mayor')
-                            if mayor_data:
-                                mayor_name = mayor_data.get('name', 'Unknown')
-                                perks = mayor_data.get('perks', [])
-                                perk_names = [p.get('name', '') for p in perks if p.get('name')]
-                                perks_str = " | ".join(perk_names) if perk_names else "No Perks"
-                                num_perks = len(perk_names)
-
-                                # Extract Minister info
-                                minister_data = mayor_data.get('minister')
-                                minister_str = ""
-                                if minister_data:
-                                    minister_name = minister_data.get('name', 'Unknown')
-                                    minister_perk = minister_data.get('perk', {}).get('name', 'Unknown Perk')
-                                    minister_str = f" | Minister: {minister_name} ({minister_perk})"
-
-                                output_message = f"Current Mayor: {num_perks} perk {mayor_name} ({perks_str}){minister_str}"
-                                await self._send_message(ctx, output_message)
-                            else:
-                                await self._send_message(ctx, "Could not find current mayor data in the API response.")
-                        else:
-                            await self._send_message(ctx, "API request failed (success=false). Could not fetch election data.")
-                    else:
-                        await self._send_message(ctx, f"Error fetching election data. API returned status {response.status}.")
-
-        except aiohttp.ClientError as e:
-            print(f"[ERROR][API] Network error fetching election data: {e}")
-            await self._send_message(ctx, "Network error while fetching election data.")
-        except json.JSONDecodeError:
-             print(f"[ERROR][API] Failed to parse JSON from election API.")
-             await self._send_message(ctx, "Error parsing election data from API.")
-        except Exception as e:
-            print(f"[ERROR][MayorCmd] Unexpected error: {e}")
-            traceback.print_exc()
-            await self._send_message(ctx, "An unexpected error occurred while fetching mayor information.")
+        await self._mayor_command.mayor_command(ctx)
 
     @commands.command(name='bank', aliases=['purse', 'money'])
     async def bank_command(self, ctx: commands.Context, *, args: str | None = None):
