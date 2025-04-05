@@ -13,14 +13,8 @@ from profiletyping import Profile
 
 import constants
 import utils
-from calculations import _get_xp_for_target_level, calculate_hotm_level, \
-    calculate_average_skill_level, calculate_dungeon_level, calculate_class_level, calculate_slayer_level, format_price
 from utils import _find_latest_profile, _get_uuid_from_ign, _get_skyblock_data, _parse_command_args
-
 from commands.kuudra import KuudraCommand
-from commands.auction_house import process_auctions_command
-from commands.cata import process_dungeon_command
-from commands.sblvl import process_sblvl_command
 from commands.classaverage import ClassAverageCommand
 from commands.mayor import MayorCommand
 from commands.bank import BankCommand
@@ -31,10 +25,9 @@ from commands.powder import PowderCommand
 from commands.slayer import SlayerCommand
 from commands.help import HelpCommand
 from commands.rtca import RtcaCommand
-from commands.overflow_skills import process_overflow_skill_command
-from commands.skills import process_skills_command
 from commands.currdungeon import CurrDungeonCommand
 from commands.runstillcata import RunsTillCataCommand
+from commands_cog import CommandsCog
 
 
 def _select_profile(profiles: list[Profile], player_uuid: str, requested_profile_name: str | None) -> Profile | None:
@@ -100,6 +93,9 @@ class Bot(commands.Bot):
         super().__init__(token=token, prefix=prefix, nick=nickname, initial_channels=initial_channels)
         print(f"[INFO] Bot initialized, attempting to join initial channels: {initial_channels}")
         # Streamer monitoring will be started in event_ready after joining initial channels
+
+        # Register Cogs
+        self.add_cog(CommandsCog(self))
 
     # --- Helper Methods ---
 
@@ -245,110 +241,6 @@ class Bot(commands.Bot):
         except Exception as send_e:
             print(f"[ERROR][Send] FAILED to send message to #{ctx.channel.name}: {send_e}")
             traceback.print_exc()
-
-    # --- Commands ---
-
-    @commands.command(name='skills')
-    async def skills_command(self, ctx: commands.Context, *, args: str | None = None):
-        parsed_args = await _parse_command_args(self, ctx, args, 'skills')
-        if parsed_args is None:
-            return
-        ign, requested_profile_name = parsed_args
-        await process_skills_command(ctx, ign, requested_profile_name=requested_profile_name)
-
-    @commands.command(name='kuudra')
-    async def kuudra_command(self, ctx: commands.Context, *, args: str | None = None):
-        await self._kuudra_command.kuudra_command(ctx, args=args)
-
-    @commands.command(name='oskill', aliases=['skillo', 'oskills', 'skillso', 'overflow'])
-    async def overflow_skill_command(self, ctx: commands.Context, *, args: str | None = None):
-        parsed_args = await _parse_command_args(self, ctx, args, 'oskill')
-        if parsed_args is None:
-            return
-        ign, requested_profile_name = parsed_args
-        await process_overflow_skill_command(ctx, ign, requested_profile_name=requested_profile_name)
-
-    @commands.command(name='auctions', aliases=['ah'])
-    async def auctions_command(self, ctx: commands.Context, *, ign: str | None = None):
-        await process_auctions_command(ctx, ign)
-
-    @commands.command(name='dungeon', aliases=['dungeons', 'cata'])
-    async def dungeon_command(self, ctx: commands.Context, *, args: str | None = None):
-        parsed_args = await _parse_command_args(self, ctx, args, 'dungeon')
-        if parsed_args is None:
-            return
-        ign, requested_profile_name = parsed_args
-        await process_dungeon_command(ctx, ign, requested_profile_name=requested_profile_name)
-
-    @commands.command(name='sblvl')
-    async def sblvl_command(self, ctx: commands.Context, *, args: str | None = None):
-        parsed_args = await _parse_command_args(self, ctx, args, 'sblvl')
-        if parsed_args is None:
-            return
-        ign, requested_profile_name = parsed_args
-        await process_sblvl_command(ctx, ign, requested_profile_name=requested_profile_name)
-
-    @commands.command(name='classaverage', aliases=['ca'])
-    async def classaverage_command(self, ctx: commands.Context, *, args: str | None = None):
-        await self._classaverage_command.classaverage_command(ctx, args=args)
-
-    @commands.command(name='mayor')
-    async def mayor_command(self, ctx: commands.Context):
-        await self._mayor_command.mayor_command(ctx)
-
-    @commands.command(name='bank', aliases=['purse', 'money'])
-    async def bank_command(self, ctx: commands.Context, *, args: str | None = None):
-        await self._bank_command.bank_command(ctx, args=args)
-
-    @commands.command(name='nucleus')
-    async def nucleus_command(self, ctx: commands.Context, *, args: str | None = None):
-        await self._nucleus_command.nucleus_command(ctx, args=args)
-
-    @commands.command(name='hotm')
-    async def hotm_command(self, ctx: commands.Context, *, args: str | None = None):
-        await self._hotm_command.hotm_command(ctx, args=args)
-
-    @commands.command(name='essence')
-    async def essence_command(self, ctx: commands.Context, *, args: str | None = None):
-        await self._essence_command.essence_command(ctx, args=args)
-
-    @commands.command(name='powder')
-    async def powder_command(self, ctx: commands.Context, *, args: str | None = None):
-        await self._powder_command.powder_command(ctx, args=args)
-
-    @commands.command(name='slayer')
-    async def slayer_command(self, ctx: commands.Context, *, args: str | None = None):
-        await self._slayer_command.slayer_command(ctx, args=args)
-
-    @commands.command(name='networth', aliases=["nw"])
-    async def networth_command(self, ctx: commands.Context, *, ign: str | None = None):
-        await self._send_message(ctx, "Networth calculation is not supported. Please use mods like NEU or SkyHelper for accurate networth calculations.")
-
-    @commands.command(name='dexter')
-    async def dexter_command(self, ctx: commands.Context):
-        await self._send_message(ctx, "YEP skill issue confirmed!")
-    dexter_command.hidden = True
-
-    @commands.command(name='dongo')
-    async def dexter_command(self, ctx: commands.Context):
-        await self._send_message(ctx, "🥚")
-    dexter_command.hidden = True
-
-    @commands.command(name='help')
-    async def help_command(self, ctx: commands.Context):
-        await self._help_command.help_command(ctx)
-
-    @commands.command(name='rtca')
-    async def rtca_command(self, ctx: commands.Context, *, args: str | None = None):
-        await self._rtca_command.rtca_command(ctx, args=args)
-
-    @commands.command(name='currdungeon')
-    async def currdungeon_command(self, ctx: commands.Context, *, args: str | None = None):
-        await self._currdungeon_command.currdungeon_command(ctx, args=args)
-
-    @commands.command(name='runstillcata')
-    async def runstillcata_command(self, ctx: commands.Context, *, args: str | None = None):
-        await self._runstillcata_command.runstillcata_command(ctx, args=args)
 
     # --- Cleanup ---
     async def close(self):
