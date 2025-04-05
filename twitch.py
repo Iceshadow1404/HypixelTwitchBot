@@ -28,6 +28,9 @@ from commands.classaverage import ClassAverageCommand
 from commands.mayor import MayorCommand
 from commands.bank import BankCommand
 from commands.nucleus import NucleusCommand
+from commands.hotm import HotmCommand
+from commands.essence import EssenceCommand
+from commands.powder import PowderCommand
 
 
 def _select_profile(profiles: list[Profile], player_uuid: str, requested_profile_name: str | None) -> Profile | None:
@@ -79,6 +82,9 @@ class Bot(commands.Bot):
         self._mayor_command = MayorCommand(self)
         self._bank_command = BankCommand(self)
         self._nucleus_command = NucleusCommand(self)
+        self._hotm_command = HotmCommand(self)
+        self._essence_command = EssenceCommand(self)
+        self._powder_command = PowderCommand(self)
         self._initial_env_channels = initial_channels 
 
         # Initialize bot with only channels from .env first
@@ -291,118 +297,15 @@ class Bot(commands.Bot):
 
     @commands.command(name='hotm')
     async def hotm_command(self, ctx: commands.Context, *, args: str | None = None):
-        parsed_args = await _parse_command_args(self, ctx, args, 'hotm')
-        if parsed_args is None:
-            return
-        ign, requested_profile_name = parsed_args
-        profile_data = await self._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
-        if not profile_data:
-             return
-
-        target_ign, player_uuid, selected_profile = profile_data
-        profile_name = selected_profile.get('cute_name', 'Unknown')
-
-        try:
-            member_data = selected_profile.get('members', {}).get(player_uuid, {})
-            mining_core_data = member_data.get('mining_core', {})
-            hotm_xp = mining_core_data.get('experience', 0.0)
-
-            level = calculate_hotm_level(self.leveling_data, hotm_xp)
-            await self._send_message(ctx, f"{target_ign}'s HotM level is {level:.2f} (XP: {hotm_xp:,.0f}) (Profile: '{profile_name}')") # Added profile name
-
-        except Exception as e:
-            print(f"[ERROR][HotmCmd] Unexpected error processing HotM data: {e}")
-            traceback.print_exc()
-            await self._send_message(ctx, "An unexpected error occurred while fetching HotM level.")
+        await self._hotm_command.hotm_command(ctx, args=args)
 
     @commands.command(name='essence')
     async def essence_command(self, ctx: commands.Context, *, args: str | None = None):
-        parsed_args = await _parse_command_args(self, ctx, args, 'essence')
-        if parsed_args is None:
-            return
-        ign, requested_profile_name = parsed_args
-        profile_data = await self._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
-        if not profile_data:
-             return
-
-        target_ign, player_uuid, selected_profile = profile_data
-        profile_name = selected_profile.get('cute_name', 'Unknown')
-
-        try:
-            member_data = selected_profile.get('members', {}).get(player_uuid, {})
-            currencies_data = member_data.get('currencies', {})
-
-            # Get the main essence container
-            all_essence_data = currencies_data.get('essence', {})
-
-            if not all_essence_data:
-                print(f"[INFO][EssenceCmd] No essence data found for {target_ign} in profile {profile_name}.")
-                # Optionally send message if needed
-                # await self._send_message(ctx, f"No essence data found for '{target_ign}' in profile '{profile_name}'.")
-                return
-
-            essence_amounts = []
-            for essence_type in constants.ESSENCE_TYPES:
-                # Access the specific essence type's dictionary
-                essence_type_data = all_essence_data.get(essence_type, {})
-                # Get the 'current' amount from within that dictionary
-                amount = essence_type_data.get('current', 0)
-
-                # Use capitalized full name
-                display_name = essence_type.capitalize() 
-                amount_str = format_price(amount)
-                essence_amounts.append(f"{display_name}: {amount_str}")
-
-            output_message = f"{target_ign} (Profile: '{profile_name}'): { ' | '.join(essence_amounts) }"
-            await self._send_message(ctx, output_message)
-
-        except Exception as e:
-            print(f"[ERROR][EssenceCmd] Unexpected error processing essence data: {e}")
-            traceback.print_exc()
-            await self._send_message(ctx, "An unexpected error occurred while fetching essences.")
+        await self._essence_command.essence_command(ctx, args=args)
 
     @commands.command(name='powder')
     async def powder_command(self, ctx: commands.Context, *, args: str | None = None):
-        parsed_args = await _parse_command_args(self, ctx, args, 'powder')
-        if parsed_args is None:
-            return
-        ign, requested_profile_name = parsed_args
-        profile_data = await self._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
-        if not profile_data:
-            return
-
-        target_ign, player_uuid, selected_profile = profile_data
-        profile_name = selected_profile.get('cute_name', 'Unknown')
-
-        try:
-            member_data = selected_profile.get('members', {}).get(player_uuid, {})
-            mining_core_data = member_data.get('mining_core', {})
-
-            # Get current powder values
-            current_mithril = mining_core_data.get('powder_mithril', 0)
-            current_gemstone = mining_core_data.get('powder_gemstone', 0)
-
-            # Get spent powder values
-            spent_mithril = mining_core_data.get('powder_spent_mithril', 0)
-            spent_gemstone = mining_core_data.get('powder_spent_gemstone', 0)
-
-            # Calculate totals
-            total_mithril = current_mithril + spent_mithril
-            total_gemstone = current_gemstone + spent_gemstone
-
-            # Format the output string
-            output_message = (
-                f"{target_ign}'s powder ({profile_name}): "
-                f"mithril powder: {current_mithril:,.0f} (total: {total_mithril:,.0f}) | "
-                f"gemstone powder: {current_gemstone:,.0f} (total: {total_gemstone:,.0f})"
-            )
-
-            await self._send_message(ctx, output_message)
-
-        except Exception as e:
-            print(f"[ERROR][PowderCmd] Unexpected error processing powder data: {e}")
-            traceback.print_exc()
-            await self._send_message(ctx, "An unexpected error occurred while fetching powder amounts.")
+        await self._powder_command.powder_command(ctx, args=args)
 
     @commands.command(name='slayer')
     async def slayer_command(self, ctx: commands.Context, *, args: str | None = None):
