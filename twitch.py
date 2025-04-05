@@ -7,18 +7,16 @@ import math
 import re
 from typing import TypeAlias
 import os
-
 import aiohttp
 from twitchio.ext import commands
+from profiletyping import Profile
 
 import constants
 import utils
 from calculations import _get_xp_for_target_level, calculate_hotm_level, \
     calculate_average_skill_level, calculate_dungeon_level, calculate_class_level, calculate_slayer_level, format_price
-from commands.overflow_skills import process_overflow_skill_command
-from commands.skills import process_skills_command
-from profiletyping import Profile
 from utils import _find_latest_profile, _get_uuid_from_ign, _get_skyblock_data, _parse_command_args
+
 from commands.kuudra import KuudraCommand
 from commands.auction_house import process_auctions_command
 from commands.cata import process_dungeon_command
@@ -31,6 +29,11 @@ from commands.nucleus import NucleusCommand
 from commands.hotm import HotmCommand
 from commands.essence import EssenceCommand
 from commands.powder import PowderCommand
+from commands.slayer import SlayerCommand
+from commands.help import HelpCommand
+from commands.rtca import RtcaCommand
+from commands.overflow_skills import process_overflow_skill_command
+from commands.skills import process_skills_command
 
 
 def _select_profile(profiles: list[Profile], player_uuid: str, requested_profile_name: str | None) -> Profile | None:
@@ -85,6 +88,9 @@ class Bot(commands.Bot):
         self._hotm_command = HotmCommand(self)
         self._essence_command = EssenceCommand(self)
         self._powder_command = PowderCommand(self)
+        self._slayer_command = SlayerCommand(self)
+        self._help_command = HelpCommand(self)
+        self._rtca_command = RtcaCommand(self)
         self._initial_env_channels = initial_channels 
 
         # Initialize bot with only channels from .env first
@@ -309,44 +315,7 @@ class Bot(commands.Bot):
 
     @commands.command(name='slayer')
     async def slayer_command(self, ctx: commands.Context, *, args: str | None = None):
-        parsed_args = await _parse_command_args(self, ctx, args, 'slayer')
-        if parsed_args is None:
-            return
-        ign, requested_profile_name = parsed_args
-        profile_data = await self._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
-        if not profile_data:
-            return
-
-        target_ign, player_uuid, selected_profile = profile_data
-        profile_name = selected_profile.get('cute_name', 'Unknown')
-
-        try:
-            member_data = selected_profile.get('members', {}).get(player_uuid, {})
-            slayer_data = member_data.get('slayer', {}).get('slayer_bosses', {})
-
-            if not slayer_data:
-                print(f"[INFO][SlayerCmd] No slayer data found for {target_ign} in profile {profile_name}.")
-                await self._send_message(ctx, f"'{target_ign}' has no slayer data in profile '{profile_name}'.")
-                return
-
-            slayer_levels = []
-            for boss_key in constants.SLAYER_BOSS_KEYS:
-                boss_data = slayer_data.get(boss_key, {})
-                xp = boss_data.get('xp', 0)
-                level = calculate_slayer_level(self.leveling_data, xp, boss_key)
-                # Capitalize boss name for display
-                display_name = boss_key.capitalize()
-                # Format with integer level and formatted XP
-                xp_str = format_price(xp) # Use format_price for consistency
-                slayer_levels.append(f"{display_name} {level} ({xp_str} XP)")
-
-            output_message = f"{target_ign}'s Slayers (Profile: '{profile_name}'): { ' | '.join(slayer_levels) }"
-            await self._send_message(ctx, output_message)
-
-        except Exception as e:
-            print(f"[ERROR][SlayerCmd] Unexpected error processing slayer data: {e}")
-            traceback.print_exc()
-            await self._send_message(ctx, "An unexpected error occurred while fetching slayer levels.")
+        await self._slayer_command.slayer_command(ctx, args=args)
 
     @commands.command(name='networth', aliases=["nw"])
     async def networth_command(self, ctx: commands.Context, *, ign: str | None = None):
@@ -360,258 +329,15 @@ class Bot(commands.Bot):
     @commands.command(name='dongo')
     async def dexter_command(self, ctx: commands.Context):
         await self._send_message(ctx, "🥚")
-
     dexter_command.hidden = True
 
     @commands.command(name='help')
     async def help_command(self, ctx: commands.Context):
-        print(f"[COMMAND] Help command triggered by {ctx.author.name} in #{ctx.channel.name}")
-        prefix = self._prefix # Get the bot's prefix
-        
-        help_parts = [f"Available commands (Prefix: {prefix}):"]
-        
-        # Sort commands alphabetically for clarity
-        command_list = sorted(self.commands.values(), key=lambda cmd: cmd.name)
-        
-        for cmd in command_list:
-            # Skip hidden commands
-            if getattr(cmd, 'hidden', False):
-                continue
-                
-            # Format aliases
-            aliases = f" (Aliases: {', '.join(cmd.aliases)})" if cmd.aliases else ""
-            
-            # Get description from docstring (first line)
-            description = "No description available." # Default
-            if cmd._callback.__doc__:
-                first_line = cmd._callback.__doc__.strip().split('\n')[0]
-                description = first_line
-                
-            help_parts.append(f"- {prefix}{cmd.name}{aliases}")
-            
-        # Join parts into a single message (consider potential length limits)
-        # For now, send as one message. If it gets too long, splitting logic would be needed.
-        help_message = " ".join(help_parts) # Use space as separator for better readability in chat
-        
-        await self._send_message(ctx, help_message)
+        await self._help_command.help_command(ctx)
 
     @commands.command(name='rtca')
     async def rtca_command(self, ctx: commands.Context, *, args: str | None = None):
-        print(f"[COMMAND] Rtca command triggered by {ctx.author.name}: {args}")
-
-        # --- 1. Argument Parsing ---
-        parsed_args = await _parse_command_args(self, ctx, args, 'rtca')
-        if parsed_args is None: # Parsing failed (message already sent by function)
-            return
-        ign, requested_profile_name = parsed_args
-        target_ca_str: str = '50' # Default target CA
-        floor_str: str = 'm7'   # Default floor
-
-        # --- Argument Validation (Moved here to run after potential defaulting) ---
-        try:
-            # Validate floor
-            if floor_str not in ['m6', 'm7']:
-                raise ValueError("Invalid floor. Please specify 'm6' or 'm7'.")
-            print(f"[DEBUG][RtcaCmd] Validated floor_str: {floor_str}")
-
-            # Validate target level if provided
-            target_level = None
-            if target_ca_str:
-                target_level = int(target_ca_str)
-                if not 1 <= target_level <= 99:
-                    raise ValueError("Target level must be between 1 and 99.")
-                print(f"[DEBUG][RtcaCmd] Validated target_level: {target_level}")
-
-        except ValueError as e:
-            await self._send_message(ctx, f"Invalid argument: {e}. Usage: {self._prefix}rtca <username> [profile_name] [target_ca=50] [floor=m7]")
-            return
-        # --- End Argument Parsing & Validation ---
-
-        # --- 2. Get Player Data ---
-        profile_data = await self._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
-        if not profile_data:
-            return # Error message already sent by helper
-
-        target_ign, player_uuid, selected_profile = profile_data
-        profile_name = selected_profile.get('cute_name', 'Unknown')
-        print(f"[INFO][RtcaCmd] Using profile: {profile_name}")
-        # --- End Fetch Player Data ---
-
-        try:
-            member_data = selected_profile.get('members', {}).get(player_uuid, {})
-            dungeons_data = member_data.get('dungeons', {})
-            player_classes_data = dungeons_data.get('player_classes', None)
-            # --- Fetch Selected Class --- (Use selected profile's data)
-            selected_class = dungeons_data.get('selected_dungeon_class')
-            selected_class_lower = selected_class.lower() if selected_class else None # Lowercase for comparison
-            print(f"[DEBUG][RtcaCmd] Fetched selected class from profile '{profile_name}': {selected_class}")
-            # -----------------------------
-
-            if player_classes_data is None:
-                 print(f"[INFO][RtcaCmd] No player_classes data found for {target_ign} in profile {profile_name}.")
-                 await self._send_message(ctx, f"'{target_ign}' has no class data in profile '{profile_name}'.")
-                 return
-
-            # --- 3. Calculate Current State ---
-            current_class_levels = {}
-            total_level_sum = 0.0
-            class_xps = {}
-            for class_name in constants.CLASS_NAMES:
-                class_xp = player_classes_data.get(class_name, {}).get('experience', 0)
-                level = calculate_class_level(self.leveling_data, class_xp)
-                current_class_levels[class_name] = level
-                class_xps[class_name] = class_xp
-                total_level_sum += level
-            
-            current_ca = total_level_sum / len(constants.CLASS_NAMES) if constants.CLASS_NAMES else 0.0
-            print(f"[DEBUG][RtcaCmd] {target_ign} - Current CA: {current_ca:.2f}, Target CA: {target_ca_str}")
-
-            # Check if target is already reached
-            if current_ca >= target_level:
-                 await self._send_message(ctx, f"{target_ign} (CA {current_ca:.2f}) has already reached or surpassed the target Class Average {target_level}.")
-                 return
-            # --- End Calculate Current State ---
-
-            # --- 4. Setup Simulation Parameters ---
-            target_level_for_milestone = target_level # Target level for each class is the target CA
-
-            # Determine XP per run based on selected floor
-            if floor_str == 'm6':
-                xp_per_run = constants.BASE_M6_CLASS_XP
-                selected_floor_name = "M6"
-            else: # Default or 'm7'
-                xp_per_run = constants.BASE_M7_CLASS_XP
-                selected_floor_name = "M7"
-                
-            # --- TEMPORARY TEST: Increase XP by 10% --- 
-            xp_per_run *= 1.06 # Disabled for now
-            print(f"[DEBUG][RtcaCmd][TEST] Applying +10% XP boost. New XP/Run: {xp_per_run:,.0f}")
-            # -----------------------------------------
-
-            if xp_per_run <= 0: # Safety check
-                print(f"[ERROR][RtcaCmd] Base XP per run is zero or negative for {selected_floor_name}.")
-                await self._send_message(ctx, "Error with base XP configuration. Cannot estimate runs.")
-                return
-
-            # Calculate target XP threshold (XP needed to COMPLETE the target level)
-            xp_required_for_target_level = _get_xp_for_target_level(self.leveling_data, target_level_for_milestone)
-            print(f"[DEBUG][RtcaCmd] Target Level XP Threshold: {xp_required_for_target_level:,.0f}")
-            print(f"[DEBUG][RtcaCmd] XP/Run Used ({selected_floor_name}): {xp_per_run:,.0f}")
-            # --- End Setup Simulation Parameters ---
-
-            # --- 5. Initialize Simulation ---
-            total_runs_simulated = 0
-            xp_needed_dict = {} # Stores remaining XP needed for each class
-            active_runs_per_class = {cn: 0 for cn in constants.CLASS_NAMES} # Tracks active runs per class
-            
-            print(f"[DEBUG][RtcaSim] --- Initializing Simulation Needs ---")
-            for class_name in constants.CLASS_NAMES:
-                current_xp = class_xps[class_name]
-                current_lvl = current_class_levels[class_name]
-                if current_lvl < target_level_for_milestone:
-                    needed = xp_required_for_target_level - current_xp
-                    if needed > 0:
-                        xp_needed_dict[class_name] = needed
-                        print(f"[DEBUG][RtcaSim] Initial Need - {class_name.capitalize()}: {needed:,.0f} XP")
-                    else:
-                        print(f"[DEBUG][RtcaSim] Initial Need - {class_name.capitalize()}: 0 XP (Already Met)")
-                else:
-                    print(f"[DEBUG][RtcaSim] Initial Need - {class_name.capitalize()}: 0 XP (Level Met)")
-
-            # Check if simulation is necessary
-            if not xp_needed_dict:
-                await self._send_message(ctx, f"{target_ign} already meets the XP requirements for CA {target_level}.")
-                return
-            # --- End Initialize Simulation ---
-
-            # --- 6. Run Simulation ---
-            print(f"[DEBUG][RtcaSim] --- Starting Simulation Loop ---")
-            max_iterations = 100000 # Safety break
-            iteration = 0
-            active_gain = xp_per_run
-            passive_gain = 0.25 * xp_per_run
-            
-            while xp_needed_dict and iteration < max_iterations:
-                iteration += 1
-                total_runs_simulated += 1
-
-                # Find bottleneck class (needs most runs if played actively)
-                bottleneck_class = None
-                max_runs_if_active = -1
-                for cn, needed in xp_needed_dict.items():
-                    runs_if_active = math.ceil(needed / active_gain)
-                    if runs_if_active > max_runs_if_active:
-                        max_runs_if_active = runs_if_active
-                        bottleneck_class = cn
-                    # Optional: Add tie-breaking logic here if needed
-
-                if bottleneck_class is None: # Should not happen if xp_needed_dict is not empty
-                    print("[ERROR][RtcaSim] Could not determine bottleneck class during simulation. Breaking loop.")
-                    break
-                
-                # Track the active class for this run
-                active_runs_per_class[bottleneck_class] += 1 
-
-                # Apply XP gains and update needed XP for the next iteration
-                next_xp_needed = {}
-                for cn, needed in xp_needed_dict.items():
-                    xp_gained = active_gain if cn == bottleneck_class else passive_gain
-                    remaining_needed = needed - xp_gained
-                    if remaining_needed > 0:
-                        next_xp_needed[cn] = remaining_needed
-                    # else: Optional: log class completion here
-                
-                xp_needed_dict = next_xp_needed # Update for the next loop iteration
-
-            print(f"[DEBUG][RtcaSim] --- Simulation Finished after {iteration} iterations ---")
-            print(f"[DEBUG][RtcaSim] Total Runs Simulated: {total_runs_simulated}")
-            print(f"[DEBUG][RtcaSim] Active Runs Breakdown: {active_runs_per_class}") 
-            if iteration >= max_iterations:
-                 print(f"[ERROR][RtcaSim] Simulation reached max iterations ({max_iterations}). Result might be inaccurate.")
-            # --- End Run Simulation ---
-
-            # --- 7. Format and Send Output ---
-            # Prepare items for sorting (only those with > 0 runs)
-            items_to_sort = [(cn, count) for cn, count in active_runs_per_class.items() if count > 0]
-
-            # Sort: selected class first, then by descending run count
-            sorted_items = sorted(
-                items_to_sort,
-                key=lambda item: (item[0].lower() != selected_class_lower if selected_class_lower else True, -item[1]) # Handle case where selected_class is None
-                # Explanation:
-                # - item[0].lower() != selected_class_lower if selected_class_lower else True:
-                #   This is False (sorts first) if item[0] IS the selected class.
-                #   This is True (sorts later) if item[0] is NOT the selected class.
-                # - -item[1]: Sorts by run count descending (negated for ascending sort on negative numbers)
-            )
-
-            # Build the breakdown string from sorted items
-            breakdown_parts = [
-                f"{'🔸 ' if selected_class_lower and cn.lower() == selected_class_lower else ''}{cn.capitalize()}: {count}" 
-                for cn, count in sorted_items
-            ]
-            breakdown_str = " | ".join(breakdown_parts) if breakdown_parts else ""
-
-            base_message = (
-
-                f"{target_ign} (CA {current_ca:.2f}) -> Target CA {target_level}: "
-                f"Needs approx {total_runs_simulated:,} {selected_floor_name} runs "
-            )
-
-            output_message = base_message + breakdown_str
-
-            # Check length and potentially remove breakdown if too long
-            if len(output_message) > constants.MAX_MESSAGE_LENGTH:
-                print("[WARN][RtcaCmd] Output message with breakdown too long. Sending without breakdown.")
-                output_message = base_message # Fallback to message without breakdown
-
-            await self._send_message(ctx, output_message)
-            # --- End Format and Send Output ---
-
-        except Exception as e:
-            print(f"[ERROR][RtcaCmd] Unexpected error calculating RTCA for {ign}: {e}")
-            traceback.print_exc()
-            await self._send_message(ctx, f"An unexpected error occurred while calculating RTCA for '{target_ign}'.")
+        await self._rtca_command.rtca_command(ctx, args=args)
 
     @commands.command(name='currdungeon')
     async def currdungeon_command(self, ctx: commands.Context, *, args: str | None = None):
