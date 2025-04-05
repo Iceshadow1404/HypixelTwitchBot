@@ -7,9 +7,7 @@ class ClassAverageCommand:
         self.bot = bot
 
     async def classaverage_command(self, ctx: commands.Context, *, args: str | None = None):
-        """Shows the player's class levels and average.
-        Syntax: #classaverage <username> [profile_name]
-        """
+
         ign: str | None = None
         requested_profile_name: str | None = None
 
