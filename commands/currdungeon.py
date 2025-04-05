@@ -6,145 +6,143 @@ import math
 
 from twitchio.ext import commands
 
+from utils import _parse_command_args
 
-async def process_currdungeon_command(ctx: commands.Context, ign: str | None = None, requested_profile_name: str | None = None):
-    bot = ctx.bot
-    print(f"[INFO][CurrDungeonCmd] Checking recent runs for player: {ign}")
-    
-    # Clean up the IGN
-    ign = ign.lstrip('@') if ign else ctx.author.name
+class CurrDungeonCommand:
+    def __init__(self, bot):
+        self.bot = bot
 
-    profile_data = await bot._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
-    if not profile_data:
-        return 
-    
-    target_ign, player_uuid, selected_profile = profile_data
-    profile_name = selected_profile.get('cute_name', 'Unknown')
-    try:
-        member_data = selected_profile.get('members', {}).get(player_uuid, {})
-        dungeons_data = member_data.get('dungeons', {})
-        treasures_data = dungeons_data.get('treasures', None)
-        runs_list = treasures_data.get('runs', []) if treasures_data else []  # Default to empty list
+    async def currdungeon_command(self, ctx: commands.Context, *, args: str | None = None):
 
-        if not runs_list:
-            print(f"[INFO][CurrDungeonCmd] No runs found for {target_ign} in profile {profile_name}.")
-            await bot._send_message(ctx, f"'{target_ign}' has no recorded dungeon runs in profile '{profile_name}'.")
+        parsed_args = await _parse_command_args(self.bot, ctx, args, 'currdungeon')
+        if parsed_args is None: # Parsing failed
             return
+        ign, requested_profile_name = parsed_args
 
-        latest_run = None
-        max_ts = 0
-        for run in runs_list:
-            if isinstance(run, dict):
-                current_ts = run.get('completion_ts', 0)
-                if isinstance(current_ts, (int, float)) and current_ts > max_ts:
-                    max_ts = current_ts
-                    latest_run = run
+        print(f"[INFO][CurrDungeonCmd] Checking recent runs for player: {ign}")
+        
+        ign = ign.lstrip('@').rstrip() if ign else ctx.author.name
 
-        if latest_run is None:
-            print(f"[INFO][CurrDungeonCmd] Could not determine the latest run for {target_ign} (no valid timestamps).")
-            await bot._send_message(ctx, f"Could not find a valid latest run for '{target_ign}' in profile '{profile_name}'.")
-            return
+        profile_data = await self.bot._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
+        if not profile_data:
+            return 
+        
+        target_ign, player_uuid, selected_profile = profile_data
+        profile_name = selected_profile.get('cute_name', 'Unknown')
+        try:
+            member_data = selected_profile.get('members', {}).get(player_uuid, {})
+            dungeons_data = member_data.get('dungeons', {})
+            treasures_data = dungeons_data.get('treasures', None)
+            runs_list = treasures_data.get('runs', []) if treasures_data else []  # Default to empty list
 
-        completion_timestamp_ms = latest_run.get('completion_ts', 0)
-        current_time_sec = datetime.now().timestamp()
-        completion_time_sec = completion_timestamp_ms / 1000.0
-        time_diff_sec = current_time_sec - completion_time_sec
+            if not runs_list:
+                print(f"[INFO][CurrDungeonCmd] No runs found for {target_ign} in profile {profile_name}.")
+                await self.bot._send_message(ctx, f"'{target_ign}' has no recorded dungeon runs in profile '{profile_name}'.")
+                return
 
-        print(f"[DEBUG][CurrDungeonCmd] Latest Run TS: {completion_time_sec}, Current TS: {current_time_sec}, Diff: {time_diff_sec:.2f} sec")
+            latest_run = None
+            max_ts = 0
+            for run in runs_list:
+                if isinstance(run, dict):
+                    current_ts = run.get('completion_ts', 0)
+                    if isinstance(current_ts, (int, float)) and current_ts > max_ts:
+                        max_ts = current_ts
+                        latest_run = run
 
-        if time_diff_sec > 600:  # More than 10 minutes
-            await bot._send_message(ctx, f"{target_ign} didn't finish a run in the last 10min.")
-            return
+            if latest_run is None:
+                print(f"[INFO][CurrDungeonCmd] Could not determine the latest run for {target_ign} (no valid timestamps).")
+                await self.bot._send_message(ctx, f"Could not find a valid latest run for '{target_ign}' in profile '{profile_name}'.")
+                return
 
-        relative_time_str = _format_relative_time(time_diff_sec)
+            completion_timestamp_ms = latest_run.get('completion_ts', 0)
+            current_time_sec = datetime.now().timestamp()
+            completion_time_sec = completion_timestamp_ms / 1000.0
+            time_diff_sec = current_time_sec - completion_time_sec
 
-        # Format run type
-        dungeon_type = latest_run.get('dungeon_type', 'Unknown Type')
-        dungeon_tier = latest_run.get('dungeon_tier', '?')
-        run_info = _format_run_type(dungeon_type, dungeon_tier)
+            print(f"[DEBUG][CurrDungeonCmd] Latest Run TS: {completion_time_sec}, Current TS: {current_time_sec}, Diff: {time_diff_sec:.2f} sec")
 
-        # Format teammates
-        participants_data = latest_run.get('participants', [])
-        teammate_strings = []
-        target_ign_lower = target_ign.lower() 
-        if isinstance(participants_data, list):
-            for participant in participants_data:
-                if isinstance(participant, dict):
-                    raw_name = participant.get('display_name')
-                    if raw_name:
-                        parsed_teammate = _parse_participant(raw_name, target_ign_lower)
-                        if parsed_teammate:  # Add only if parsing succeeded and it's not the target player
-                            teammate_strings.append(parsed_teammate)
+            if time_diff_sec > 600:  # More than 10 minutes
+                await self.bot._send_message(ctx, f"{target_ign} didn't finish a run in the last 10min.")
+                return
 
-        teammates_str = ", ".join(teammate_strings) if teammate_strings else "No other participants listed"
+            relative_time_str = self._format_relative_time(time_diff_sec)
 
-        # Construct final message
-        output_message = (
-            f"{target_ign}'s last run was {run_info} finished {relative_time_str}. "
-            f"Teammates: {teammates_str}"
-        )
-        await bot._send_message(ctx, output_message)
+            # Format run type using helper method
+            dungeon_type = latest_run.get('dungeon_type', 'Unknown Type')
+            dungeon_tier = latest_run.get('dungeon_tier', '?')
+            run_info = self._format_run_type(dungeon_type, dungeon_tier)
 
-    except Exception as e:
-        print(f"[ERROR][CurrDungeonCmd] Unexpected error processing current run for {target_ign}: {e}")
-        traceback.print_exc()
-        await bot._send_message(ctx, f"An unexpected error occurred while checking the current run for '{target_ign}'.")
+            # Format teammates using helper method
+            participants_data = latest_run.get('participants', [])
+            teammate_strings = []
+            target_ign_lower = target_ign.lower() 
+            if isinstance(participants_data, list):
+                for participant in participants_data:
+                    if isinstance(participant, dict):
+                        raw_name = participant.get('display_name')
+                        if raw_name:
+                            parsed_teammate = self._parse_participant(raw_name, target_ign_lower)
+                            if parsed_teammate:  # Add only if parsing succeeded and it's not the target player
+                                teammate_strings.append(parsed_teammate)
 
+            teammates_str = ", ".join(teammate_strings) if teammate_strings else "No other participants listed"
 
-def _format_relative_time(time_diff_sec: float) -> str:
-    """Formats a time difference in seconds into 'X seconds/minutes ago'."""
-    if time_diff_sec < 60:
-        seconds_ago = round(time_diff_sec)
-        # Handle pluralization correctly
-        return f"{seconds_ago} second{'s' if seconds_ago != 1 else ''} ago"
-    else:
-        minutes_ago = math.floor(time_diff_sec / 60)
-        # Handle pluralization correctly
-        return f"{minutes_ago} minute{'s' if minutes_ago != 1 else ''} ago"
+            output_message = (
+                f"{target_ign}'s last run was {run_info} finished {relative_time_str}. "
+                f"Teammates: {teammates_str}"
+            )
+            await self.bot._send_message(ctx, output_message)
 
+        except Exception as e:
+            print(f"[ERROR][CurrDungeonCmd] Unexpected error processing current run for {target_ign}: {e}")
+            traceback.print_exc()
+            await self.bot._send_message(ctx, f"An unexpected error occurred while checking the current run for '{target_ign}'.")
 
-def _format_run_type(dungeon_type: str, dungeon_tier: str | int) -> str:
-    """Formats dungeon type and tier into F{tier} or M{tier}."""
-    dtype_lower = dungeon_type.lower()
-    if dtype_lower == 'catacombs':
-        return f"F{dungeon_tier}"
-    elif dtype_lower == 'master_catacombs':
-        return f"M{dungeon_tier}"
-    else:
-        # Fallback for unexpected dungeon types
-        return f"{dungeon_type.capitalize()} {dungeon_tier}"
-
-
-def _parse_participant(raw_display_name: str, target_ign_lower: str) -> str | None:
-    """Parses participant display name, cleans it, and extracts info.
-    Returns 'Username (Class Level)' or None if it's the target player or parsing fails."""
-    try:
-        # 1. Remove color codes
-        cleaned_name = re.sub(r'§[0-9a-fk-or]', '', raw_display_name)
-        # 2. Split username and class info
-        parts = cleaned_name.split(':', 1)
-        username_part = parts[0].strip()
-
-        # 3. Skip the target player themselves (case-insensitive)
-        if username_part.lower() == target_ign_lower:
-            return None
-
-        # 4. Extract Class Name and Level (if available)
-        final_class = 'Unknown'
-        final_level = '?'
-        if len(parts) > 1:
-            class_info_part = parts[1].strip() # e.g., "Tank (50)"
-            class_match = re.match(r'^([a-zA-Z]+)', class_info_part)
-            if class_match:
-                final_class = class_match.group(1)
-            level_match = re.search(r'\((\d+)\)', class_info_part)
-            if level_match:
-                final_level = level_match.group(1)
-
-        if username_part:
-            return f"{username_part} ({final_class} {final_level})"
+    def _format_relative_time(self, time_diff_sec: float) -> str:
+        """Formats a time difference in seconds into 'X seconds/minutes ago'."""
+        if time_diff_sec < 60:
+            seconds_ago = round(time_diff_sec)
+            return f"{seconds_ago} second{'s' if seconds_ago != 1 else ''} ago"
         else:
+            minutes_ago = math.floor(time_diff_sec / 60)
+            return f"{minutes_ago} minute{'s' if minutes_ago != 1 else ''} ago"
+
+    def _format_run_type(self, dungeon_type: str, dungeon_tier: str | int) -> str:
+        """Formats dungeon type and tier into F{tier} or M{tier}."""
+        dtype_lower = dungeon_type.lower()
+        if dtype_lower == 'catacombs':
+            return f"F{dungeon_tier}"
+        elif dtype_lower == 'master_catacombs':
+            return f"M{dungeon_tier}"
+        else:
+            return f"{dungeon_type.capitalize()} {dungeon_tier}"
+
+    def _parse_participant(self, raw_display_name: str, target_ign_lower: str) -> str | None:
+        """Parses participant display name, cleans it, and extracts info.
+        Returns 'Username (Class Level)' or None if it's the target player or parsing fails."""
+        try:
+            cleaned_name = re.sub(r'§[0-9a-fk-or]', '', raw_display_name)
+            parts = cleaned_name.split(':', 1)
+            username_part = parts[0].strip()
+
+            if username_part.lower() == target_ign_lower:
+                return None
+
+            final_class = 'Unknown'
+            final_level = '?'
+            if len(parts) > 1:
+                class_info_part = parts[1].strip()
+                class_match = re.match(r'^([a-zA-Z]+)', class_info_part)
+                if class_match:
+                    final_class = class_match.group(1)
+                level_match = re.search(r'\((\d+)\)', class_info_part)
+                if level_match:
+                    final_level = level_match.group(1)
+
+            if username_part:
+                return f"{username_part} ({final_class} {final_level})"
+            else:
+                return None 
+        except Exception as e:
+            print(f"[WARN][CurrDungeon] Error parsing participant '{raw_display_name}': {e}")
             return None 
-    except Exception as e:
-        print(f"[WARN][CurrDungeon] Error parsing participant '{raw_display_name}': {e}")
-        return None 
