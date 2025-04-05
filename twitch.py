@@ -18,7 +18,7 @@ from calculations import _get_xp_for_target_level, calculate_hotm_level, \
 from commands.overflow_skills import process_overflow_skill_command
 from commands.skills import process_skills_command
 from profiletyping import Profile
-from utils import _find_latest_profile, _get_uuid_from_ign, _get_skyblock_data
+from utils import _find_latest_profile, _get_uuid_from_ign, _get_skyblock_data, _parse_command_args
 from commands.kuudra import KuudraCommand
 from commands.auction_house import process_auctions_command
 from commands.cata import process_dungeon_command
@@ -26,6 +26,8 @@ from commands.sblvl import process_sblvl_command
 from commands.currdungeon import process_currdungeon_command
 from commands.classaverage import ClassAverageCommand
 from commands.mayor import MayorCommand
+from commands.bank import BankCommand
+from commands.nucleus import NucleusCommand
 
 
 def _select_profile(profiles: list[Profile], player_uuid: str, requested_profile_name: str | None) -> Profile | None:
@@ -62,24 +64,6 @@ def _select_profile(profiles: list[Profile], player_uuid: str, requested_profile
     return latest_profile
 
 
-def _parse_command_args(args: str | None, ctx: commands.Context, prefix: str, command_name: str) -> tuple[str, str | None]:
-    ign: str | None = None
-    requested_profile_name: str | None = None
-
-    if not args:
-        ign = ctx.author.name
-    else:
-        parts = args.split()
-        ign = parts[0]
-        if len(parts) > 1:
-            requested_profile_name = parts[1]
-        if len(parts) > 2:
-            ctx.bot._send_message(ctx, f"Too many arguments. Usage: {prefix}{command_name} <username> [profile_name]")
-            return None, None
-
-    return ign.rstrip(), requested_profile_name
-
-
 class Bot(commands.Bot):
     """
     Twitch Bot for interacting with Hypixel SkyBlock API and providing commands.
@@ -93,6 +77,8 @@ class Bot(commands.Bot):
         self._kuudra_command = KuudraCommand(self)
         self._classaverage_command = ClassAverageCommand(self)
         self._mayor_command = MayorCommand(self)
+        self._bank_command = BankCommand(self)
+        self._nucleus_command = NucleusCommand(self)
         self._initial_env_channels = initial_channels 
 
         # Initialize bot with only channels from .env first
@@ -212,23 +198,13 @@ class Bot(commands.Bot):
         if message.echo:
             return  # Ignore messages sent by the bot itself
 
-        # Ensure the message has a valid channel and author
         if not hasattr(message.channel, 'name') or not hasattr(message.author, 'name') or not message.author.name:
             return # Ignore system messages or messages without proper author/channel context
 
-        # Check if the message came from a channel the bot is actually connected to
-        # This is needed because twitchio might receive messages from channels it tried to join but failed
-        # Using a set for potentially faster lookups if the channel list grows large
-        # Filter out None values before accessing name
         connected_channel_names = {ch.name for ch in self.connected_channels if ch is not None}
         if message.channel.name not in connected_channel_names:
-            # print(f"[DEBUG] Ignored message from non-connected channel: #{message.channel.name}")
             return
 
-        # Print received message for debugging
-        # print(f"[MSG] #{message.channel.name} - {message.author.name}: {message.content}")
-
-        # Process commands defined in this class
         await self.handle_commands(message)
 
     async def _send_message(self, ctx: commands.Context, message: str):
@@ -237,13 +213,8 @@ class Bot(commands.Bot):
         log_message = message[:450] + '...' if len(message) > 450 else message
         print(f"[DEBUG][Send] Attempting to send to #{ctx.channel.name}: {log_message}") 
         try:
-            # --- WORKAROUND: Small delay before sending ---
-            # May help with potential silent rate limits or timing issues after await calls.
             await asyncio.sleep(0.3) 
-            # ---------------------------------------------
 
-            # --- WORKAROUND: Re-fetch channel object ---
-            # May help if the context's channel object state becomes inconsistent after awaits.
             channel_name = ctx.channel.name
             channel = self.get_channel(channel_name)
             if channel:
@@ -255,7 +226,6 @@ class Bot(commands.Bot):
                 print(f"[WARN][Send] Could not re-fetch channel object for {channel_name}. Falling back to ctx.send().")
                 await ctx.send(message)
                 print(f"[DEBUG][Send] Successfully sent message via ctx.send() to #{channel_name}.")
-            # -----------------------------------------
 
         except Exception as send_e:
             print(f"[ERROR][Send] FAILED to send message to #{ctx.channel.name}: {send_e}")
@@ -265,10 +235,10 @@ class Bot(commands.Bot):
 
     @commands.command(name='skills')
     async def skills_command(self, ctx: commands.Context, *, args: str | None = None):
-        ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'skills')
-        if ign is None:
+        parsed_args = await _parse_command_args(self, ctx, args, 'skills')
+        if parsed_args is None:
             return
-
+        ign, requested_profile_name = parsed_args
         await process_skills_command(ctx, ign, requested_profile_name=requested_profile_name)
 
     @commands.command(name='kuudra')
@@ -277,9 +247,10 @@ class Bot(commands.Bot):
 
     @commands.command(name='oskill', aliases=['skillo', 'oskills', 'skillso', 'overflow'])
     async def overflow_skill_command(self, ctx: commands.Context, *, args: str | None = None):
-        ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'oskill')
-        if ign is None:
+        parsed_args = await _parse_command_args(self, ctx, args, 'oskill')
+        if parsed_args is None:
             return
+        ign, requested_profile_name = parsed_args
         await process_overflow_skill_command(ctx, ign, requested_profile_name=requested_profile_name)
 
     @commands.command(name='auctions', aliases=['ah'])
@@ -288,18 +259,18 @@ class Bot(commands.Bot):
 
     @commands.command(name='dungeon', aliases=['dungeons', 'cata'])
     async def dungeon_command(self, ctx: commands.Context, *, args: str | None = None):
-        ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'dungeon')
-        if ign is None:
+        parsed_args = await _parse_command_args(self, ctx, args, 'dungeon')
+        if parsed_args is None:
             return
-
+        ign, requested_profile_name = parsed_args
         await process_dungeon_command(ctx, ign, requested_profile_name=requested_profile_name)
 
     @commands.command(name='sblvl')
     async def sblvl_command(self, ctx: commands.Context, *, args: str | None = None):
-        ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'sblvl')
-        if ign is None:
+        parsed_args = await _parse_command_args(self, ctx, args, 'sblvl')
+        if parsed_args is None:
             return
-
+        ign, requested_profile_name = parsed_args
         await process_sblvl_command(ctx, ign, requested_profile_name=requested_profile_name)
 
     @commands.command(name='classaverage', aliases=['ca'])
@@ -312,88 +283,18 @@ class Bot(commands.Bot):
 
     @commands.command(name='bank', aliases=['purse', 'money'])
     async def bank_command(self, ctx: commands.Context, *, args: str | None = None):
-        ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'bank')
-        if ign is None:
-            return
-
-        profile_data = await self._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
-        if not profile_data:
-            return
-
-        target_ign, player_uuid, selected_profile = profile_data
-        profile_name = selected_profile.get('cute_name', 'Unknown')
-
-        try:
-            # Bank Balance (Profile wide)
-            banking_data = selected_profile.get('banking', {})
-            bank_balance = banking_data.get('balance', 0.0)
-
-            # Purse and Personal Bank (Member specific)
-            member_data = selected_profile.get('members', {}).get(player_uuid, {})
-            currencies_data = member_data.get('currencies', {})
-            purse_balance = currencies_data.get('coin_purse', 0.0)
-            personal_bank_balance = member_data.get('profile', {}).get('bank_account', None)
-
-            # Construct the output message
-            parts = [
-                f"{target_ign}'s Bank: {bank_balance:,.0f}",
-                f"Purse: {purse_balance:,.0f}"
-            ]
-            if personal_bank_balance is not None:
-                parts.append(f"Personal Bank: {personal_bank_balance:,.0f}")
-            parts.append(f"(Profile: '{profile_name}')")
-
-            output_message = ", ".join(parts)
-            await self._send_message(ctx, output_message)
-
-        except Exception as e:
-            print(f"[ERROR][BankCmd] Unexpected error processing balance data: {e}")
-            traceback.print_exc()
-            await self._send_message(ctx, "An unexpected error occurred while fetching balance information.")
+        await self._bank_command.bank_command(ctx, args=args)
 
     @commands.command(name='nucleus')
     async def nucleus_command(self, ctx: commands.Context, *, args: str | None = None):
-        ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'nucleus')
-        if ign is None:
-            return
-
-        profile_data = await self._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
-        if not profile_data:
-            return
-
-        target_ign, player_uuid, selected_profile = profile_data
-        profile_name = selected_profile.get('cute_name', 'Unknown')
-
-        try:
-            member_data = selected_profile.get('members', {}).get(player_uuid, {})
-            mining_core_data = member_data.get('mining_core', {})
-            crystals_data = mining_core_data.get('crystals', {})
-
-            sum_total_placed = 0
-            print(f"[DEBUG][NucleusCmd] Calculating for {target_ign} ({profile_name}):")
-            for crystal_key in constants.NUCLEUS_CRYSTALS:
-                crystal_info = crystals_data.get(crystal_key, {})
-                total_placed = crystal_info.get('total_placed', 0)
-                sum_total_placed += total_placed
-                print(f"  - {crystal_key}: {total_placed}") # Debug print activated
-
-            # Calculate result: sum divided by 5, rounded down
-            nucleus_result = sum_total_placed // 5
-            print(f"[DEBUG][NucleusCmd] Sum: {sum_total_placed}, Result (Sum // 5): {nucleus_result}")
-
-            await self._send_message(ctx, f"{target_ign}'s nucleus runs: {nucleus_result} (Profile: '{profile_name}')") # Added profile name back
-
-        except Exception as e:
-            print(f"[ERROR][NucleusCmd] Unexpected error processing nucleus data: {e}")
-            traceback.print_exc()
-            await self._send_message(ctx, "An unexpected error occurred while fetching Nucleus runs.")
+        await self._nucleus_command.nucleus_command(ctx, args=args)
 
     @commands.command(name='hotm')
     async def hotm_command(self, ctx: commands.Context, *, args: str | None = None):
-        ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'hotm')
-        if ign is None:
+        parsed_args = await _parse_command_args(self, ctx, args, 'hotm')
+        if parsed_args is None:
             return
-
+        ign, requested_profile_name = parsed_args
         profile_data = await self._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
         if not profile_data:
              return
@@ -416,10 +317,10 @@ class Bot(commands.Bot):
 
     @commands.command(name='essence')
     async def essence_command(self, ctx: commands.Context, *, args: str | None = None):
-        ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'essence')
-        if ign is None:
+        parsed_args = await _parse_command_args(self, ctx, args, 'essence')
+        if parsed_args is None:
             return
-
+        ign, requested_profile_name = parsed_args
         profile_data = await self._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
         if not profile_data:
              return
@@ -462,10 +363,10 @@ class Bot(commands.Bot):
 
     @commands.command(name='powder')
     async def powder_command(self, ctx: commands.Context, *, args: str | None = None):
-        ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'powder')
-        if ign is None:
+        parsed_args = await _parse_command_args(self, ctx, args, 'powder')
+        if parsed_args is None:
             return
-
+        ign, requested_profile_name = parsed_args
         profile_data = await self._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
         if not profile_data:
             return
@@ -505,10 +406,10 @@ class Bot(commands.Bot):
 
     @commands.command(name='slayer')
     async def slayer_command(self, ctx: commands.Context, *, args: str | None = None):
-        ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'slayer')
-        if ign is None:
+        parsed_args = await _parse_command_args(self, ctx, args, 'slayer')
+        if parsed_args is None:
             return
-
+        ign, requested_profile_name = parsed_args
         profile_data = await self._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
         if not profile_data:
             return
@@ -596,48 +497,12 @@ class Bot(commands.Bot):
         print(f"[COMMAND] Rtca command triggered by {ctx.author.name}: {args}")
 
         # --- 1. Argument Parsing ---
-        ign: str | None = None
-        requested_profile_name: str | None = None
+        parsed_args = await _parse_command_args(self, ctx, args, 'rtca')
+        if parsed_args is None: # Parsing failed (message already sent by function)
+            return
+        ign, requested_profile_name = parsed_args
         target_ca_str: str = '50' # Default target CA
         floor_str: str = 'm7'   # Default floor
-
-        if not args:
-            ign = ctx.author.name # Default to message author if no args provided
-            ign = ign.rstrip()
-            print(f"[DEBUG][RtcaCmd] No arguments provided, defaulting IGN to: {ign}")
-        else:
-            parts = args.split()
-            ign = parts[0] # First part is always IGN
-            remaining_parts = parts[1:]
-
-            potential_profile_name = None
-            potential_target_ca = None
-            potential_floor = None
-            unidentified_parts = [] # Store parts that don't match known patterns
-
-            # Iterate through remaining parts to identify them
-            for part in remaining_parts:
-                part_lower = part.lower()
-                if part_lower in ['m6', 'm7'] and potential_floor is None:
-                    potential_floor = part_lower
-                elif part.isdigit() and potential_target_ca is None:
-                    potential_target_ca = part
-                else:
-                    if potential_profile_name is None:
-                        potential_profile_name = part
-                    else:
-                        unidentified_parts.append(part)
-            
-            requested_profile_name = potential_profile_name
-            if potential_target_ca is not None:
-                target_ca_str = potential_target_ca
-            if potential_floor is not None:
-                floor_str = potential_floor
-
-            if unidentified_parts:
-                usage_message = f"Too many or ambiguous arguments: {unidentified_parts}. Usage: {self._prefix}rtca <username> [profile_name] [target_ca=50] [floor=m7]"
-                await self._send_message(ctx, usage_message)
-                return
 
         # --- Argument Validation (Moved here to run after potential defaulting) ---
         try:
@@ -847,10 +712,10 @@ class Bot(commands.Bot):
 
     @commands.command(name='currdungeon')
     async def currdungeon_command(self, ctx: commands.Context, *, args: str | None = None):
-        ign, requested_profile_name = _parse_command_args(args, ctx, self._prefix, 'currdungeon')
-        if ign is None:
+        parsed_args = await _parse_command_args(self, ctx, args, 'currdungeon')
+        if parsed_args is None:
             return
-
+        ign, requested_profile_name = parsed_args
         await process_currdungeon_command(ctx, ign, requested_profile_name=requested_profile_name)
 
     @commands.command(name='runstillcata')
@@ -858,8 +723,10 @@ class Bot(commands.Bot):
         print(f"[COMMAND] RunsTillCata command triggered by {ctx.author.name}: {args}")
 
         # --- 1. Argument Parsing ---
-        ign: str | None = None
-        requested_profile_name: str | None = None
+        parsed_args = await _parse_command_args(self, ctx, args, 'runstillcata')
+        if parsed_args is None: # Parsing failed
+            return
+        ign, requested_profile_name = parsed_args
         target_level_str: str | None = None
         floor_str: str = 'm7'   # Default floor
 

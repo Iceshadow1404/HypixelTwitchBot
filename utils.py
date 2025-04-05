@@ -5,6 +5,7 @@ from typing import TypedDict
 
 import aiohttp
 from dotenv import load_dotenv
+from twitchio.ext import commands
 
 import constants
 
@@ -163,3 +164,29 @@ async def _get_skyblock_data(hypixel_api_key, uuid: str) -> list | None:
         print(f"[ERROR][API] Unexpected error during Hypixel API request: {e}")
         traceback.print_exc()
         return None
+
+
+async def _parse_command_args(bot, ctx: commands.Context, args: str | None, command_name: str) -> tuple[str, str | None] | None:
+    """Parses common command arguments for username and optional profile name."""
+    ign: str | None = None
+    requested_profile_name: str | None = None
+
+    if not args:
+        ign = ctx.author.name
+    else:
+        parts = args.split()
+        ign = parts[0]
+        if len(parts) > 1:
+            requested_profile_name = parts[1]
+        if len(parts) > 2:
+            # Use bot._send_message for sending messages
+            await bot._send_message(ctx, f"Too many arguments. Usage: {bot._prefix}{command_name} <username> [profile_name]")
+            return None, None # Return None, None to indicate failure
+
+    if ign is None:
+        # This case should ideally not be reached if ctx.author.name is always valid
+        print("[WARN][ParseArgs] IGN became None unexpectedly.")
+        await bot._send_message(ctx, "Could not determine username.")
+        return None, None
+
+    return ign.rstrip(), requested_profile_name
