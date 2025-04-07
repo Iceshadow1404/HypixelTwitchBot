@@ -17,6 +17,9 @@ class RtcaCommand:
         """
         print(f"[COMMAND] Rtca command triggered by {ctx.author.name}: {args}")
 
+        # Strip whitespace from args. If args becomes empty, treat as None.
+        args = args.strip() if args else None
+
         ign: str | None = None
         requested_profile_name: str | None = None
         target_ca_str: str = '50'
@@ -24,9 +27,10 @@ class RtcaCommand:
 
         if not args:
             ign = ctx.author.name
-            ign = ign.rstrip()
-            print(f"[DEBUG][RtcaCmd] No arguments provided, defaulting IGN to: {ign}")
+
+            print(f"[DEBUG][RtcaCmd] No arguments (or only whitespace) provided, defaulting IGN to: {ign}")
         else:
+            # This part now only runs if args contained non-whitespace characters
             parts = args.split()
             ign = parts[0] 
             remaining_parts = parts[1:]
@@ -128,8 +132,6 @@ class RtcaCommand:
                 
             # --- Optional XP boost logic (kept commented out) ---
             xp_per_run *= 1.06 # CURRENT FIX NEED TO IMPLEMENT CLASS XP BOOSTS
-            # print(f"[DEBUG][RtcaCmd][TEST] Applying +10% XP boost. New XP/Run: {xp_per_run:,.0f}")
-            # ----------------------------------------- 
 
             if xp_per_run <= 0: # Safety check
                 print(f"[ERROR][RtcaCmd] Base XP per run is zero or negative for {selected_floor_name}.")

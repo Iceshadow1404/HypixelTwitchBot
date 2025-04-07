@@ -9,7 +9,6 @@ from commands.auction_house import process_auctions_command
 from commands.cata import process_dungeon_command
 from commands.sblvl import process_sblvl_command
 
-# Note: Command classes (KuudraCommand, MayorCommand, etc.) are accessed via self.bot
 
 class CommandsCog(commands.Cog):
     def __init__(self, bot: 'twitch.IceBot'):

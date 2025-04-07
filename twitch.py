@@ -167,18 +167,19 @@ class Bot(commands.Bot):
                 print(f"[INFO] Found {len(live_streamer_names)} potential live Hypixel SkyBlock streamers.")
                 # Determine which channels to join (those not already connected to)
                 # Filter out None before accessing name
-                currently_connected = {ch.name for ch in self.connected_channels if ch is not None} # Use a set for efficient lookup
-                streamers_to_join = [name for name in live_streamer_names if name not in currently_connected]
-                streamers_to_join_lower = [name.lower() for name in streamers_to_join] # Ensure lowercase
+                # Use the potentially updated list of connected channels after the retry
+                currently_connected = {ch.name.lower() for ch in self.connected_channels if ch is not None} # Use lowercase set
+                streamers_to_join = [name for name in live_streamer_names if name.lower() not in currently_connected]
+                # No need for streamers_to_join_lower now as we compare lowercase directly
 
-                if streamers_to_join_lower:
-                    print(f"[INFO] Attempting to join {len(streamers_to_join_lower)} newly found live channels (lowercased): {streamers_to_join_lower}")
+                if streamers_to_join:
+                    print(f"[INFO] Attempting to join {len(streamers_to_join)} newly found live channels: {streamers_to_join}")
                     try:
-                        await self.join_channels(streamers_to_join_lower)
-                        print("[INFO] Join command sent. Waiting briefly for channel list update...")
+                        await self.join_channels(streamers_to_join) # Join using original case names from Twitch API
+                        print("[INFO] Join command sent for live channels. Waiting briefly for channel list update...")
                         await asyncio.sleep(5) # Give TwitchIO time to process joins and update self.connected_channels
                     except Exception as join_error:
-                        print(f"[ERROR] Error trying to join channels {streamers_to_join_lower}: {join_error}")
+                        print(f"[ERROR] Error trying to join channels: {join_error}")
                 else:
                     print("[INFO] All found live streamers are already in the connected channel list.")
             # --- End Fetch and Join ---
@@ -327,70 +328,43 @@ class Bot(commands.Bot):
                     print("[WARN][Monitor] Failed to fetch live streamers in monitoring loop. Will retry later.")
                 else:
                     # Filter out None values before accessing name
-                    currently_connected = {ch.name for ch in self.connected_channels if ch is not None}
-                    streamers_to_join = [name for name in live_streamer_names if name not in currently_connected]
-                    streamers_to_join_lower = [name.lower() for name in streamers_to_join] # Ensure lowercase
+                    currently_connected_names = {ch.name for ch in self.connected_channels if ch is not None}
+                    # Find streamers to join using direct, case-sensitive comparison
+                    streamers_to_join = [name for name in live_streamer_names if name not in currently_connected_names]
 
-                    if streamers_to_join_lower:
-                        print(f"[INFO][Monitor] Found new live channels to join (lowercased): {streamers_to_join_lower}")
+                    if streamers_to_join:
+                        print(f"[INFO][Monitor] Found new live channels to join: {streamers_to_join}")
                         try:
-                            # Try to join channels directly without validation
-                            # TwitchIO will handle invalid channels gracefully
-                            await self.join_channels(streamers_to_join_lower)
-                            print(f"[INFO][Monitor] Join command sent for channels: {streamers_to_join_lower}")
-
-                            # Wait a moment for the joins to process
+                            # Try to join channels using original casing
+                            await self.join_channels(streamers_to_join)
+                            print(f"[INFO][Monitor] Join command successfully sent for channels: {streamers_to_join}")
+                            # Optional: Add a small delay if needed for channels to fully connect before next cycle
                             await asyncio.sleep(5)
 
-                            # Check which channels were actually joined
-                            new_connected = {ch.name for ch in self.connected_channels if ch is not None}
-                            # Use the lowercased list for checking success/failure
-                            successfully_joined = set(streamers_to_join_lower) & new_connected
-                            failed_channels_set = set(streamers_to_join_lower) - new_connected # Keep track of failed lowercase names
-
-                            if successfully_joined:
-                                print(f"[INFO][Monitor] Successfully joined channels: {successfully_joined}")
-                                for channel in successfully_joined:
-                                    channel_obj = self.get_channel(channel) # Use lowercase name here
-                                    if channel_obj:
-                                        print(f"[DEBUG][Monitor] Channel '{channel}' details:")
-                                        print(f"[DEBUG][Monitor] - ID: {channel_obj.id}")
-                                        print(f"[DEBUG][Monitor] - Name: {channel_obj.name}")
-                                        print(f"[DEBUG][Monitor] - Joined at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-
-                            if failed_channels_set:
-                                print(f"[WARN][Monitor] Failed to join channels: {failed_channels_set}")
-                                # Try to join failed channels individually with a delay
-                                for channel_lower in failed_channels_set: # Iterate over the failed lowercase names
-                                    try:
-                                        await asyncio.sleep(1)  # Small delay between individual joins
-                                        await self.join_channels([channel_lower]) # Join using lowercase name
-                                        print(f"[INFO][Monitor] Retried joining channel: {channel_lower}")
-                                        # Check if retry was successful
-                                        await asyncio.sleep(2)
-                                        if channel_lower in {ch.name for ch in self.connected_channels if ch is not None}:
-                                            print(f"[INFO][Monitor] Retry successful for channel: {channel_lower}")
-                                        else:
-                                            print(f"[WARN][Monitor] Retry failed for channel: {channel_lower}")
-                                    except Exception as e:
-                                        print(f"[WARN][Monitor] Failed to join channel {channel_lower} after retry: {e}")
-
                         except Exception as join_error:
-                            print(f"[ERROR][Monitor] Error trying to join channels: {join_error}")
-                            # Try to join channels individually as a fallback
-                            for channel_lower in streamers_to_join_lower: # Iterate the lowercased list
+                            # Log the error from the bulk join attempt
+                            print(f"[ERROR][Monitor] Error trying to bulk join channels {streamers_to_join}: {join_error}")
+                            # Fallback: Try to join channels individually as a fallback, using original case
+                            print(f"[INFO][Monitor] Falling back to individual joins for: {streamers_to_join}")
+                            for channel_name in streamers_to_join:
                                 try:
-                                    await asyncio.sleep(1)  # Small delay between individual joins
-                                    await self.join_channels([channel_lower]) # Join using lowercase name
-                                    print(f"[INFO][Monitor] Successfully joined channel: {channel_lower}")
-                                    # Verify the join was successful
-                                    await asyncio.sleep(2)
-                                    if channel_lower in {ch.name for ch in self.connected_channels if ch is not None}:
-                                        print(f"[DEBUG][Monitor] Verified successful join for channel: {channel_lower}")
+                                    # Check *again* if connected before individual join, 
+                                    # as some might have succeeded despite the bulk error
+                                    if channel_name not in {ch.name for ch in self.connected_channels if ch is not None}:
+                                        await asyncio.sleep(1)  # Small delay between individual joins
+                                        await self.join_channels([channel_name]) # Use original case name
+                                        print(f"[INFO][Monitor] Attempted individual join for channel: {channel_name}")
+                                        # Verification after individual join (optional, adds slight delay)
+                                        await asyncio.sleep(2)
+                                        if channel_name in {ch.name for ch in self.connected_channels if ch is not None}:
+                                            print(f"[DEBUG][Monitor] Verified successful individual join for channel: {channel_name}")
+                                        else:
+                                            # This might occur if the channel doesn't exist or there are permissions issues
+                                            print(f"[WARN][Monitor] Individual join attempt for {channel_name} did not result in connection.")
                                     else:
-                                        print(f"[WARN][Monitor] Join verification failed for channel: {channel_lower}")
-                                except Exception as e:
-                                    print(f"[WARN][Monitor] Failed to join channel {channel_lower}: {e}")
+                                         print(f"[DEBUG][Monitor] Channel {channel_name} was already connected before individual join attempt.")
+                                except Exception as individual_join_error:
+                                    print(f"[WARN][Monitor] Failed individual join attempt for channel {channel_name}: {individual_join_error}")
 
                 # Wait 2 minutes before next check
                 await asyncio.sleep(120)
