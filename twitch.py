@@ -1,6 +1,7 @@
 # twitch.py
 import asyncio
 import json
+import logging
 import traceback
 from datetime import datetime
 import math
@@ -9,6 +10,8 @@ from typing import TypeAlias
 import os
 import aiohttp
 from twitchio.ext import commands
+from uvicorn.config import LOGGING_CONFIG
+
 from profiletyping import Profile
 
 import constants
@@ -87,12 +90,13 @@ class Bot(commands.Bot):
         self._rtca_command = RtcaCommand(self)
         self._currdungeon_command = CurrDungeonCommand(self)
         self._runstillcata_command = RunsTillCataCommand(self)
-        self._initial_env_channels = initial_channels 
+
+        # Store initial channels from .env to avoid leaving them
+        self._initial_env_channels = [ch.lower() for ch in initial_channels]
 
         # Initialize bot with only channels from .env first
         super().__init__(token=token, prefix=prefix, nick=nickname, initial_channels=initial_channels)
         print(f"[INFO] Bot initialized, attempting to join initial channels: {initial_channels}")
-        # Streamer monitoring will be started in event_ready after joining initial channels
 
         # Register Cogs
         self.add_cog(CommandsCog(self))
@@ -313,66 +317,125 @@ class Bot(commands.Bot):
             return None # Return None on unexpected errors
 
     async def _monitor_streams(self):
-        """Continuously monitors for new Hypixel SkyBlock streams and joins them."""
-        print("[INFO][Monitor] Background stream monitor starting loop.")
-        
+        """Continuously monitors for Hypixel SkyBlock streams, joins new ones and leaves irrelevant ones after 15 minutes."""
+        print("[INFO][Monitor] Background stream monitor starting...")
+
+        # Dictionary to track channels that might need to be left, with timestamps
+        channels_pending_leave = {}  # format: {channel_name: timestamp_when_marked}
+
         while True:
             try:
-                print("[INFO][Monitor] Checking for live streams...")
                 live_streamer_names = await self._fetch_live_hypixel_streamers()
+                current_time = datetime.now()
 
                 if live_streamer_names is None:
-                    print("[WARN][Monitor] Failed to fetch live streamers in monitoring loop. Will retry later.")
+                    print("[WARN][Monitor] Failed to fetch live streamers. Will retry later.")
                 else:
-                    # Filter out None values before accessing name
-                    currently_connected_names = {ch.name for ch in self.connected_channels if ch is not None}
-                    # Find streamers to join using direct, case-sensitive comparison
+                    # Get current connected channels (excluding None values)
+                    currently_connected_channels = [ch for ch in self.connected_channels if ch is not None]
+                    currently_connected_names = {ch.name for ch in currently_connected_channels}
+                    live_streamer_names_set = set(live_streamer_names)
+
+                    # Find channels that need to be joined (new live channels)
                     streamers_to_join = [name for name in live_streamer_names if name not in currently_connected_names]
 
-                    if streamers_to_join:
-                        print(f"[INFO][Monitor] Found new live channels to join: {streamers_to_join}")
+                    # Find channels that might need to be left
+                    initial_env_channels_set = set(self._initial_env_channels)
+
+                    # Process currently connected channels
+                    for channel in currently_connected_channels:
+                        channel_name = channel.name
+
+                        # Skip initial channels as these should never be left
+                        if channel_name.lower() in initial_env_channels_set:
+                            continue
+
+                        # Check if channel is still live and relevant
+                        if channel_name not in live_streamer_names_set:
+                            # If not in live list, mark for potential leaving
+                            if channel_name not in channels_pending_leave:
+                                channels_pending_leave[channel_name] = current_time
+                        else:
+                            # Channel is live again, remove from pending leave list if present
+                            if channel_name in channels_pending_leave:
+                                del channels_pending_leave[channel_name]
+
+                    # Process channels that have been pending leave for 15+ minutes
+                    channels_to_leave = []
+                    channels_to_remove_from_pending = []
+
+                    for channel_name, marked_time in channels_pending_leave.items():
+                        # Calculate how long the channel has been pending leave
+                        time_offline = (current_time - marked_time).total_seconds() / 60  # in minutes
+
+                        # Check if channel has been offline/irrelevant for 15+ minutes
+                        if time_offline >= 15:
+                            # Only add to leave list if still connected
+                            if channel_name in currently_connected_names:
+                                channels_to_leave.append(channel_name)
+                            # Mark for removal from pending dictionary regardless
+                            channels_to_remove_from_pending.append(channel_name)
+
+                    # Clean up pending list
+                    for channel_name in channels_to_remove_from_pending:
+                        channels_pending_leave.pop(channel_name, None)
+
+                    # Handle leaving channels
+                    if channels_to_leave:
+                        print(
+                            f"[INFO][Monitor] Leaving {len(channels_to_leave)} channels (15+ min timeout): {channels_to_leave}")
                         try:
-                            # Try to join channels using original casing
+                            await self.part_channels(channels_to_leave)
+                        except Exception as leave_error:
+                            print(f"[ERROR][Monitor] Error leaving channels: {leave_error}")
+
+                    # Handle joining new channels
+                    if streamers_to_join:
+                        print(
+                            f"[INFO][Monitor] Joining {len(streamers_to_join)} new live channels: {streamers_to_join}")
+                        try:
                             await self.join_channels(streamers_to_join)
-                            print(f"[INFO][Monitor] Join command successfully sent for channels: {streamers_to_join}")
-                            # Optional: Add a small delay if needed for channels to fully connect before next cycle
-                            await asyncio.sleep(5)
-
+                            await asyncio.sleep(3)  # Brief delay for channels to connect
                         except Exception as join_error:
-                            # Log the error from the bulk join attempt
-                            print(f"[ERROR][Monitor] Error trying to bulk join channels {streamers_to_join}: {join_error}")
-                            # Fallback: Try to join channels individually as a fallback, using original case
-                            print(f"[INFO][Monitor] Falling back to individual joins for: {streamers_to_join}")
+                            print(f"[ERROR][Monitor] Error joining channels in bulk: {join_error}")
+                            # Fallback: individual joins
                             for channel_name in streamers_to_join:
-                                retry_delay = 1
-                                max_retries = 5
-                                for attempt in range(max_retries):
-                                    try:
-                                        await self.join_channels([channel_name])
-                                        print(f"[INFO] Successfully joined {channel_name} on attempt {attempt + 1}")
-                                        break
-                                    except Exception as e:
-                                        print(f"[WARN] Failed to join {channel_name}, attempt {attempt + 1}: {e}")
-                                        if attempt < max_retries - 1:
-                                            await asyncio.sleep(retry_delay)
-                                            retry_delay *= 2  # Exponential backoff
+                                try:
+                                    await self.join_channels([channel_name])
+                                except Exception:
+                                    pass  # Skip detailed error logging for individual failures
 
-                            await asyncio.sleep(5)
-                            if channel_name in {ch.name.lower() for ch in self.connected_channels if ch is not None}:
-                                print(f"[INFO] Verified connection to {channel_name}")
-                            else:
-                                print(f"[WARN] Failed to verify connection to {channel_name} after join attempt")
+                    # Periodic status report (only if changes occurred)
+                    if channels_to_leave or streamers_to_join or len(channels_pending_leave) > 0:
+                        currently_connected = [ch.name for ch in self.connected_channels if ch is not None]
 
-                            currently_connected_lower = {ch.name.lower() for ch in self.connected_channels if ch is not None}
-                            streamers_to_join = [name for name in live_streamer_names if name.lower() not in currently_connected_lower]
-                # Wait 2 minutes before next check
+                        # Format pending leave channels with their timestamps
+                        pending_channels_info = ""
+                        if channels_pending_leave:
+                            # Group channels by their marked time
+                            time_to_channels = {}
+                            for ch_name, mark_time in channels_pending_leave.items():
+                                time_str = mark_time.strftime("%H:%M:%S")
+                                if time_str not in time_to_channels:
+                                    time_to_channels[time_str] = []
+                                time_to_channels[time_str].append(ch_name)
+
+                            # Format the grouped channels
+                            grouped_entries = []
+                            for time_str, channel_list in time_to_channels.items():
+                                channels_str = ", ".join(channel_list)
+                                grouped_entries.append(f"{channels_str} ({time_str})")
+
+                            pending_channels_info = " | Pending: " + " | ".join(grouped_entries)
+
+                        logging.INFO(f"[STATUS][Monitor] Connected: {len(currently_connected)}{pending_channels_info}")
+
+                # Wait before next check
                 await asyncio.sleep(120)
 
             except Exception as e:
-                print(f"[ERROR][Monitor] Unexpected error in monitoring loop: {e}")
-                traceback.print_exc()
-                print("[INFO][Monitor] Waiting 5 minutes after error before retrying...")
-                await asyncio.sleep(300) # Wait longer after an unexpected error
+                print(f"[ERROR][Monitor] Unexpected error: {e}")
+                await asyncio.sleep(300)  # 5 minute retry delay after errors
 
     async def _get_twitch_access_token(self, client_id: str, client_secret: str) -> str | None:
         """Get an access token from Twitch using client credentials."""
