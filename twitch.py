@@ -10,7 +10,6 @@ from typing import TypeAlias
 import os
 import aiohttp
 from twitchio.ext import commands
-from uvicorn.config import LOGGING_CONFIG
 
 from profiletyping import Profile
 
@@ -428,7 +427,7 @@ class Bot(commands.Bot):
 
                             pending_channels_info = " | Pending: " + " | ".join(grouped_entries)
 
-                        logging.INFO(f"[STATUS][Monitor] Connected: {len(currently_connected)}{pending_channels_info}")
+                        print(f"[STATUS][Monitor] Connected: {len(currently_connected)}{pending_channels_info}")
 
                 # Wait before next check
                 await asyncio.sleep(120)
