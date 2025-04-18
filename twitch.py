@@ -101,6 +101,26 @@ class Bot(commands.Bot):
         self.add_cog(CommandsCog(self))
 
     # --- Helper Methods ---
+    async def event_command_error(self, ctx: commands.Context, error: Exception):
+        """Handle command errors with additional channel context information."""
+        if isinstance(error, commands.CommandNotFound):
+            # Extract the command name from the error message
+            match = re.search(r'No command "([^"]+)" was found', str(error))
+            cmd_name = match.group(1) if match else "unknown"
+
+            # Get channel name safely
+            channel_name = ctx.channel.name if hasattr(ctx.channel, 'name') else "unknown_channel"
+
+            # Get username safely
+            username = ctx.author.name if hasattr(ctx.author, 'name') else "unknown_user"
+
+            # Log with the channel information
+            print(f"[WARN] Command not found: '{cmd_name}' from channel: #{channel_name} by user: {username}")
+        else:
+            # Log other command errors
+            channel_name = ctx.channel.name if hasattr(ctx.channel, 'name') else "unknown_channel"
+            print(f"[ERROR] Error in command from channel #{channel_name}: {str(error)}")
+            traceback.print_exc()
 
     async def _get_player_profile_data(self, ctx: commands.Context, ign: str | None, requested_profile_name: str | None = None) -> tuple[str, str, Profile] | None:
         """
