@@ -96,7 +96,7 @@ class CommandsCog(commands.Cog):
         """Displays the specified player's Mithril and Gemstone powder."""
         await self.bot._powder_command.powder_command(ctx, args=args)
 
-    @commands.command(name='slayer')
+    @commands.command(name='slayer', aliases=['slayers'])
     async def slayer_command(self, ctx: commands.Context, *, args: str | None = None):
         """Displays the specified player's slayer stats."""
         await self.bot._slayer_command.slayer_command(ctx, args=args)
