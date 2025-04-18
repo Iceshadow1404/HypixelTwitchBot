@@ -16,6 +16,7 @@ from profiletyping import Profile
 import constants
 import utils
 from utils import _find_latest_profile, _get_uuid_from_ign, _get_skyblock_data, _parse_command_args
+from skyblock import SkyblockClient
 from commands.kuudra import KuudraCommand
 from commands.classaverage import ClassAverageCommand
 from commands.mayor import MayorCommand
@@ -58,7 +59,7 @@ def _select_profile(profiles: list[Profile], player_uuid: str, requested_profile
 
     # Fallback: Find the latest profile (original logic)
     # Assuming _find_latest_profile also expects a list of profiles
-    latest_profile = _find_latest_profile(profiles, player_uuid)
+    latest_profile = utils._find_latest_profile(profiles, player_uuid)
     if latest_profile:
         print(f"[DEBUG][ProfileSelect] Using latest profile: '{latest_profile.get('cute_name', 'Unknown')}'")
     else:
@@ -70,12 +71,19 @@ class Bot(commands.Bot):
     """
     Twitch Bot for interacting with Hypixel SkyBlock API and providing commands.
     """
-    def __init__(self, token: str, prefix: str, nickname: str, initial_channels: list[str], hypixel_api_key: str | None = None):
+
+    def __init__(self, token: str, prefix: str, nickname: str, initial_channels: list[str],
+                 hypixel_api_key: str | None = None):
         """Initializes the Bot."""
         self.start_time = datetime.now()
         self.hypixel_api_key = hypixel_api_key
         self.leveling_data = utils._load_leveling_data()
         self.constants = constants
+
+        # Initialize the SkyblockClient for caching
+        self.session = None  # Will be initialized in event_ready
+        self.skyblock_client = None  # Will be initialized in event_ready
+
         self._kuudra_command = KuudraCommand(self)
         self._classaverage_command = ClassAverageCommand(self)
         self._mayor_command = MayorCommand(self)
@@ -125,8 +133,7 @@ class Bot(commands.Bot):
     async def _get_player_profile_data(self, ctx: commands.Context, ign: str | None, requested_profile_name: str | None = None) -> tuple[str, str, Profile] | None:
         """
         Handles the common boilerplate for commands needing player profile data.
-        Checks API key, gets UUID, fetches profiles, selects the requested or latest profile.
-        Sends error messages to chat if steps fail.
+        Uses the SkyblockClient with caching for API calls.
         Returns (target_ign, player_uuid, selected_profile_data) or None if an error occurred.
         """
         if not self.hypixel_api_key:
@@ -134,18 +141,26 @@ class Bot(commands.Bot):
             await ctx.send("Hypixel API is not configured. Please check the .env file.")
             return None
 
+        # Ensure skyblock_client is initialized
+        if not self.skyblock_client:
+            print("[ERROR] SkyblockClient not initialized. Creating new instance.")
+            self.session = aiohttp.ClientSession()
+            self.skyblock_client = SkyblockClient(self.hypixel_api_key, self.session)
+
         target_ign = ign if ign.rstrip() != "" else ctx.author.name
         target_ign = target_ign.lstrip('@')
         # Use direct ctx.send for initial feedback message
         #await ctx.send(f"Searching data for '{target_ign}'...")
 
-        player_uuid = await _get_uuid_from_ign(target_ign)
+        # Use cached client instead of utility functions
+        player_uuid = await self.skyblock_client.get_uuid_from_ign(target_ign)
         if not player_uuid:
             # Use _send_message for this potentially delayed error message
             await self._send_message(ctx, f"Could not find Minecraft account for '{target_ign}'. Please check the username.")
             return None
 
-        profiles = await _get_skyblock_data(self.hypixel_api_key, player_uuid)
+        # Use cached client instead of utility functions
+        profiles = await self.skyblock_client.get_skyblock_data(player_uuid)
         if profiles is None: # API error occurred
             # Use _send_message for this potentially delayed error message
             await self._send_message(ctx, f"Could not fetch SkyBlock profiles for '{target_ign}'. An API error occurred.")
@@ -155,7 +170,7 @@ class Bot(commands.Bot):
             await self._send_message(ctx, f"'{target_ign}' seems to have no SkyBlock profiles yet.")
             return None
 
-        # Select the profile using the new helper function
+        # Select the profile using the helper function
         selected_profile = _select_profile(profiles, player_uuid, requested_profile_name)
 
         if not selected_profile:
@@ -173,6 +188,11 @@ class Bot(commands.Bot):
         try:
             print("[INFO] Bot starting up... Initial connection established.")
 
+            # Initialize the aiohttp session and SkyblockClient for caching
+            self.session = aiohttp.ClientSession()
+            self.skyblock_client = SkyblockClient(self.hypixel_api_key, self.session)
+            print("[INFO] SkyblockClient initialized with caching.")
+
             print(f'------')
             print(f'Logged in as: {self.nick} ({self.user_id})')
             # Filter out None before accessing name
@@ -185,22 +205,25 @@ class Bot(commands.Bot):
             live_streamer_names = await self._fetch_live_hypixel_streamers()
 
             if live_streamer_names is None:
-                print("[WARN] Could not fetch live streamers during startup (API/Token issue?). Monitoring will still run.")
+                print(
+                    "[WARN] Could not fetch live streamers during startup (API/Token issue?). Monitoring will still run.")
             else:
                 print(f"[INFO] Found {len(live_streamer_names)} potential live Hypixel SkyBlock streamers.")
                 # Determine which channels to join (those not already connected to)
                 # Filter out None before accessing name
                 # Use the potentially updated list of connected channels after the retry
-                currently_connected = {ch.name.lower() for ch in self.connected_channels if ch is not None} # Use lowercase set
+                currently_connected = {ch.name.lower() for ch in self.connected_channels if
+                                       ch is not None}  # Use lowercase set
                 streamers_to_join = [name for name in live_streamer_names if name.lower() not in currently_connected]
                 # No need for streamers_to_join_lower now as we compare lowercase directly
 
                 if streamers_to_join:
-                    print(f"[INFO] Attempting to join {len(streamers_to_join)} newly found live channels: {streamers_to_join}")
+                    print(
+                        f"[INFO] Attempting to join {len(streamers_to_join)} newly found live channels: {streamers_to_join}")
                     try:
-                        await self.join_channels(streamers_to_join) # Join using original case names from Twitch API
+                        await self.join_channels(streamers_to_join)  # Join using original case names from Twitch API
                         print("[INFO] Join command sent for live channels. Waiting briefly for channel list update...")
-                        await asyncio.sleep(5) # Give TwitchIO time to process joins and update self.connected_channels
+                        await asyncio.sleep(5)  # Give TwitchIO time to process joins and update self.connected_channels
                     except Exception as join_error:
                         print(f"[ERROR] Error trying to join channels: {join_error}")
                 else:
@@ -210,7 +233,8 @@ class Bot(commands.Bot):
             # --- Final Output ---
             # Filter out None before accessing name
             final_connected_channels = [ch.name for ch in self.connected_channels if ch is not None]
-            print(f'[INFO] Final connected channels list ({len(final_connected_channels)} total): {final_connected_channels}')
+            print(
+                f'[INFO] Final connected channels list ({len(final_connected_channels)} total): {final_connected_channels}')
 
             if final_connected_channels:
                 print(f"[INFO] Bot setup complete. Monitoring active streams.")
@@ -221,6 +245,10 @@ class Bot(commands.Bot):
             # --- Start Background Monitoring ---
             print("[INFO] Starting background stream monitor task...")
             asyncio.create_task(self._monitor_streams())
+
+            # --- Start Cache Cleanup Task ---
+            print("[INFO] Starting background cache cleanup task...")
+            asyncio.create_task(self._periodic_cache_cleanup())
 
         except Exception as e:
             print(f"[ERROR] Error during event_ready: {e}")
@@ -264,10 +292,62 @@ class Bot(commands.Bot):
             print(f"[ERROR][Send] FAILED to send message to #{ctx.channel.name}: {send_e}")
             traceback.print_exc()
 
+    async def _periodic_cache_cleanup(self):
+        """Periodically clears old entries from the cache to prevent memory growth."""
+        print("[INFO][CacheCleanup] Starting periodic cache cleanup task...")
+        cleanup_interval = 3600  # Clean up every hour
+
+        while True:
+            try:
+                await asyncio.sleep(cleanup_interval)
+                if self.skyblock_client:
+                    # Create new dictionaries with only unexpired entries
+                    current_time = time.time()
+
+                    # Count current entries
+                    uuid_count_before = len(self.skyblock_client.uuid_cache)
+                    data_count_before = len(self.skyblock_client.skyblock_data_cache)
+                    print(
+                        f"[INFO][CacheCleanup] Cleaning cache. Before: {uuid_count_before} UUID entries, {data_count_before} Skyblock data entries")
+
+                    # Clear expired entries
+                    expired_uuid_keys = []
+                    for key, (value, timestamp) in self.skyblock_client.uuid_cache.items():
+                        if current_time - timestamp >= self.skyblock_client.CACHE_TTL:
+                            expired_uuid_keys.append(key)
+
+                    expired_data_keys = []
+                    for key, (value, timestamp) in self.skyblock_client.skyblock_data_cache.items():
+                        if current_time - timestamp >= self.skyblock_client.CACHE_TTL:
+                            expired_data_keys.append(key)
+
+                    # Remove expired entries
+                    for key in expired_uuid_keys:
+                        self.skyblock_client.uuid_cache.pop(key)
+                    for key in expired_data_keys:
+                        self.skyblock_client.skyblock_data_cache.pop(key)
+
+                    # Report cleanup results
+                    uuid_count_after = len(self.skyblock_client.uuid_cache)
+                    data_count_after = len(self.skyblock_client.skyblock_data_cache)
+                    print(
+                        f"[INFO][CacheCleanup] Cache cleaned. After: {uuid_count_after} UUID entries (-{uuid_count_before - uuid_count_after}), {data_count_after} Skyblock data entries (-{data_count_before - data_count_after})")
+                else:
+                    print("[WARN][CacheCleanup] SkyblockClient not initialized, skipping cleanup")
+            except Exception as e:
+                print(f"[ERROR][CacheCleanup] Error during cache cleanup: {e}")
+                traceback.print_exc()
+
     # --- Cleanup ---
     async def close(self):
         """Gracefully shuts down the bot and closes sessions."""
         print("[INFO] Shutting down bot...")
+
+        # Close the aiohttp session when shutting down
+        if self.session and not self.session.closed:
+            await self.session.close()
+            print("[INFO] aiohttp session closed.")
+
         await super().close()
         print("[INFO] Bot connection closed.")
 
@@ -464,7 +544,7 @@ class Bot(commands.Bot):
             "client_secret": client_secret,
             "grant_type": "client_credentials"
         }
-        
+
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, params=params) as response:
@@ -472,13 +552,14 @@ class Bot(commands.Bot):
                         data = await response.json()
                         token = data.get("access_token")
                         if token:
-                             # print("[DEBUG] Successfully obtained/refreshed Twitch access token.")
-                             return token
+                            # print("[DEBUG] Successfully obtained/refreshed Twitch access token.")
+                            return token
                         else:
-                             print("[ERROR] Got 200 OK but no access token in response.")
-                             return None
+                            print("[ERROR] Got 200 OK but no access token in response.")
+                            return None
                     else:
-                        print(f"[ERROR] Failed to get access token. Status: {response.status}, Response: {await response.text()}")
+                        print(
+                            f"[ERROR] Failed to get access token. Status: {response.status}, Response: {await response.text()}")
                         return None
         except Exception as e:
             print(f"[ERROR] Error getting access token: {e}")
