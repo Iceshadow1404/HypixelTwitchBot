@@ -19,3 +19,5 @@ BASE_M7_CLASS_XP = 340000 # From runs-to-class-average.ts
 PAUL_MULTIPLIER = 1.0 # Paul perk not considered
 
 MAX_MESSAGE_LENGTH = 480 # Approx limit to avoid Twitch cutting messages
+
+CACHE_TTL = 300

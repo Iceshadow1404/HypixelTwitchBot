@@ -35,28 +35,27 @@ from commands_cog import CommandsCog
 
 
 def _select_profile(profiles: list[Profile], player_uuid: str, requested_profile_name: str | None) -> Profile | None:
-    """Selects a profile from a list based on requested cute_name or falls back to the latest."""
+    # Selects a profile from a list based on requested cute_name or falls back to the latest.
 
     # Try to find by cute_name if requested
     if requested_profile_name:
         requested_name_lower = requested_profile_name.lower()
-        for profile in profiles: # Iterate directly over the list
+        for profile in profiles:  # Iterate directly over the list
             cute_name = profile.get('cute_name')
             if cute_name and cute_name.lower() == requested_name_lower:
                 # Check if player is actually a member of this profile
                 if player_uuid in profile.get('members', {}):
                     print(f"[DEBUG][ProfileSelect] Found matching profile by cute_name: '{cute_name}'")
-                    return profile # Return the matched profile
+                    return profile  # Return the matched profile
                 else:
                     # This case should be rare if the API returns profiles correctly
-                    print(f"[WARN][ProfileSelect] Found profile '{cute_name}' matching request, but player UUID {player_uuid} is not a member.")
-                    # Continue searching or fallback?
-                    # Fallback seems safer, the player might have misspelled or the profile structure is odd.
-                    pass # Let it fall back to latest profile logic
+                    print(
+                        f"[WARN][ProfileSelect] Found profile '{cute_name}' matching request, but player UUID {player_uuid} is not a member.")
+                    pass  # Let it fall back to latest profile logic
 
         # If loop finishes without finding a match by name
-        print(f"[WARN][ProfileSelect] Requested profile name '{requested_profile_name}' not found or player not member. Falling back to latest profile.")
-        # Fallthrough to latest profile logic below
+        print(
+            f"[WARN][ProfileSelect] Requested profile name '{requested_profile_name}' not found or player not member. Falling back to latest profile.")
 
     # Fallback: Find the latest profile (original logic)
     # Assuming _find_latest_profile also expects a list of profiles
@@ -69,13 +68,11 @@ def _select_profile(profiles: list[Profile], player_uuid: str, requested_profile
 
 
 class Bot(commands.Bot):
-    """
-    Twitch Bot for interacting with Hypixel SkyBlock API and providing commands.
-    """
+    # Twitch Bot for interacting with Hypixel SkyBlock API and providing commands.
 
     def __init__(self, token: str, prefix: str, nickname: str, initial_channels: list[str],
                  hypixel_api_key: str | None = None):
-        """Initializes the Bot."""
+        # Initializes the Bot.
         self.start_time = datetime.now()
         self.hypixel_api_key = hypixel_api_key
         self.leveling_data = utils._load_leveling_data()
@@ -111,7 +108,7 @@ class Bot(commands.Bot):
 
     # --- Helper Methods ---
     async def event_command_error(self, ctx: commands.Context, error: Exception):
-        """Handle command errors with additional channel context information."""
+        # Handle command errors with additional channel context information.
         if isinstance(error, commands.CommandNotFound):
             # Extract the command name from the error message
             match = re.search(r'No command "([^"]+)" was found', str(error))
@@ -131,12 +128,11 @@ class Bot(commands.Bot):
             print(f"[ERROR] Error in command from channel #{channel_name}: {str(error)}")
             traceback.print_exc()
 
-    async def _get_player_profile_data(self, ctx: commands.Context, ign: str | None, requested_profile_name: str | None = None) -> tuple[str, str, Profile] | None:
-        """
-        Handles the common boilerplate for commands needing player profile data.
-        Uses the SkyblockClient with caching for API calls.
-        Returns (target_ign, player_uuid, selected_profile_data) or None if an error occurred.
-        """
+    async def _get_player_profile_data(self, ctx: commands.Context, ign: str | None,
+                                       requested_profile_name: str | None = None) -> tuple[str, str, Profile] | None:
+        # Handles the common boilerplate for commands needing player profile data.
+        # Uses the SkyblockClient with caching for API calls.
+        # Returns (target_ign, player_uuid, selected_profile_data) or None if an error occurred.
         if not self.hypixel_api_key:
             # Use direct ctx.send for initial API key check as _send_message might fail early
             await ctx.send("Hypixel API is not configured. Please check the .env file.")
@@ -151,22 +147,24 @@ class Bot(commands.Bot):
         target_ign = ign if ign.rstrip() != "" else ctx.author.name
         target_ign = target_ign.lstrip('@')
         # Use direct ctx.send for initial feedback message
-        #await ctx.send(f"Searching data for '{target_ign}'...")
+        # await ctx.send(f"Searching data for '{target_ign}'...")
 
         # Use cached client instead of utility functions
         player_uuid = await self.skyblock_client.get_uuid_from_ign(target_ign)
         if not player_uuid:
             # Use _send_message for this potentially delayed error message
-            await self._send_message(ctx, f"Could not find Minecraft account for '{target_ign}'. Please check the username.")
+            await self._send_message(ctx,
+                                     f"Could not find Minecraft account for '{target_ign}'. Please check the username.")
             return None
 
         # Use cached client instead of utility functions
         profiles = await self.skyblock_client.get_skyblock_data(player_uuid)
-        if profiles is None: # API error occurred
+        if profiles is None:  # API error occurred
             # Use _send_message for this potentially delayed error message
-            await self._send_message(ctx, f"Could not fetch SkyBlock profiles for '{target_ign}'. An API error occurred.")
+            await self._send_message(ctx,
+                                     f"Could not fetch SkyBlock profiles for '{target_ign}'. An API error occurred.")
             return None
-        if not profiles: # API succeeded but returned no profiles
+        if not profiles:  # API succeeded but returned no profiles
             # Use _send_message for this potentially delayed error message
             await self._send_message(ctx, f"'{target_ign}' seems to have no SkyBlock profiles yet.")
             return None
@@ -177,7 +175,8 @@ class Bot(commands.Bot):
         if not selected_profile:
             # If _select_profile returned None (e.g., no latest found after fallback)
             profile_msg = f"the requested profile '{requested_profile_name}' or" if requested_profile_name else "an active"
-            await self._send_message(ctx, f"Could not find {profile_msg} profile for '{target_ign}'. Player must be a member of at least one profile.")
+            await self._send_message(ctx,
+                                     f"Could not find {profile_msg} profile for '{target_ign}'. Player must be a member of at least one profile.")
             return None
 
         return target_ign, player_uuid, selected_profile
@@ -185,7 +184,7 @@ class Bot(commands.Bot):
     # --- Bot Events ---
 
     async def event_ready(self):
-        """Called once the bot has successfully connected to Twitch and joined initial channels."""
+        # Called once the bot has successfully connected to Twitch and joined initial channels.
         try:
             print("[INFO] Bot starting up... Initial connection established.")
 
@@ -256,12 +255,12 @@ class Bot(commands.Bot):
             traceback.print_exc()
 
     async def event_message(self, message):
-        """Processes incoming Twitch chat messages."""
+        # Processes incoming Twitch chat messages.
         if message.echo:
             return  # Ignore messages sent by the bot itself
 
         if not hasattr(message.channel, 'name') or not hasattr(message.author, 'name') or not message.author.name:
-            return # Ignore system messages or messages without proper author/channel context
+            return  # Ignore system messages or messages without proper author/channel context
 
         connected_channel_names = {ch.name for ch in self.connected_channels if ch is not None}
         if message.channel.name not in connected_channel_names:
@@ -270,12 +269,12 @@ class Bot(commands.Bot):
         await self.handle_commands(message)
 
     async def _send_message(self, ctx: commands.Context, message: str):
-        """Helper function to send messages, incorporating workarounds for potential issues."""
+        # Helper function to send messages, incorporating workarounds for potential issues.
         # Truncate message for logging if it's too long
         log_message = message[:450] + '...' if len(message) > 450 else message
-        print(f"[DEBUG][Send] Attempting to send to #{ctx.channel.name}: {log_message}") 
+        print(f"[DEBUG][Send] Attempting to send to #{ctx.channel.name}: {log_message}")
         try:
-            await asyncio.sleep(0.3) 
+            await asyncio.sleep(0.3)
 
             channel_name = ctx.channel.name
             channel = self.get_channel(channel_name)
@@ -294,54 +293,38 @@ class Bot(commands.Bot):
             traceback.print_exc()
 
     async def _periodic_cache_cleanup(self):
-        """Periodically clears old entries from the cache to prevent memory growth."""
+        # Periodically clears old entries from the cache to prevent memory growth.
         print("[INFO][CacheCleanup] Starting periodic cache cleanup task...")
         cleanup_interval = 3600  # Clean up every hour
 
         while True:
             try:
                 await asyncio.sleep(cleanup_interval)
-                if self.skyblock_client:
-                    # Create new dictionaries with only unexpired entries
-                    current_time = time.time()
+                if self.skyblock_client and hasattr(self.skyblock_client, 'cache'):
+                    # Get stats before cleanup
+                    stats_before = self.skyblock_client.cache.get_stats()
 
-                    # Count current entries
-                    uuid_count_before = len(self.skyblock_client.uuid_cache)
-                    data_count_before = len(self.skyblock_client.skyblock_data_cache)
+                    # Run the cleanup
+                    uuid_removed, skyblock_removed = self.skyblock_client.cache.cleanup_expired()
+
+                    # Get stats after cleanup
+                    stats_after = self.skyblock_client.cache.get_stats()
+
                     print(
-                        f"[INFO][CacheCleanup] Cleaning cache. Before: {uuid_count_before} UUID entries, {data_count_before} Skyblock data entries")
-
-                    # Clear expired entries
-                    expired_uuid_keys = []
-                    for key, (value, timestamp) in self.skyblock_client.uuid_cache.items():
-                        if current_time - timestamp >= self.skyblock_client.CACHE_TTL:
-                            expired_uuid_keys.append(key)
-
-                    expired_data_keys = []
-                    for key, (value, timestamp) in self.skyblock_client.skyblock_data_cache.items():
-                        if current_time - timestamp >= self.skyblock_client.CACHE_TTL:
-                            expired_data_keys.append(key)
-
-                    # Remove expired entries
-                    for key in expired_uuid_keys:
-                        self.skyblock_client.uuid_cache.pop(key)
-                    for key in expired_data_keys:
-                        self.skyblock_client.skyblock_data_cache.pop(key)
-
-                    # Report cleanup results
-                    uuid_count_after = len(self.skyblock_client.uuid_cache)
-                    data_count_after = len(self.skyblock_client.skyblock_data_cache)
-                    print(
-                        f"[INFO][CacheCleanup] Cache cleaned. After: {uuid_count_after} UUID entries (-{uuid_count_before - uuid_count_after}), {data_count_after} Skyblock data entries (-{data_count_before - data_count_after})")
+                        f"[INFO][CacheCleanup] Cache cleaned. Before: {stats_before['uuid_cache_size']} UUID entries, "
+                        f"{stats_before['skyblock_data_cache_size']} Skyblock data entries. "
+                        f"After: {stats_after['uuid_cache_size']} UUID entries (-{uuid_removed}), "
+                        f"{stats_after['skyblock_data_cache_size']} Skyblock data entries (-{skyblock_removed})")
                 else:
-                    print("[WARN][CacheCleanup] SkyblockClient not initialized, skipping cleanup")
+                    print(
+                        "[WARN][CacheCleanup] SkyblockClient not initialized or cache not available, skipping cleanup")
             except Exception as e:
                 print(f"[ERROR][CacheCleanup] Error during cache cleanup: {e}")
                 traceback.print_exc()
 
     # --- Cleanup ---
     async def close(self):
-        """Gracefully shuts down the bot and closes sessions."""
+        # Gracefully shuts down the bot and closes sessions.
         print("[INFO] Shutting down bot...")
 
         # Close the aiohttp session when shutting down

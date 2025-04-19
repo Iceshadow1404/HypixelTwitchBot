@@ -5,7 +5,10 @@ import traceback
 from typing import Optional, Dict, List, Any
 import time
 
-# --- Konstanten ---
+from constants import CACHE_TTL
+from cache import SkyblockCache
+
+# --- Constants ---
 MOJANG_API_URL = "https://api.mojang.com/users/profiles/minecraft/{username}"
 HYPIXEL_API_URL = "https://api.hypixel.net/v2/skyblock/profiles"
 AVERAGE_SKILLS_LIST = [
@@ -13,35 +16,27 @@ AVERAGE_SKILLS_LIST = [
     'enchanting', 'alchemy', 'taming', 'carpentry'
 ]
 
-CACHE_TTL = 300
 
 class SkyblockClient:
-    """Handles interactions with Mojang and Hypixel APIs for SkyBlock data."""
+    # Handles interactions with Mojang and Hypixel APIs for SkyBlock data.
 
     def __init__(self, api_key: Optional[str], session: aiohttp.ClientSession):
         self.api_key = api_key
         self.session = session
-        self.uuid_cache = {}  # {username: (uuid, timestamp)}
-        self.skyblock_data_cache = {}  # {uuid: (data, timestamp)}
+        self.cache = SkyblockCache(CACHE_TTL)
+
         if not api_key:
             print("[SkyblockClient] Warnung: Initialisiert ohne Hypixel API Key.")
         else:
             print("[SkyblockClient] Initialisiert mit Hypixel API Key.")
 
     async def get_uuid_from_ign(self, username: str) -> Optional[str]:
-        """Fetches the Minecraft UUID for a given In-Game Name using Mojang API or cache."""
-        current_time = time.time()
+        # Fetches the Minecraft UUID for a given In-Game Name using Mojang API or cache.
 
         # Check cache first
-        if username in self.uuid_cache:
-            uuid, timestamp = self.uuid_cache[username]
-            if current_time - timestamp < CACHE_TTL:
-                print(
-                    f"[SkyblockClient][Cache] UUID for '{username}' found in cache (Age: {int(current_time - timestamp)}s)")
-                return uuid
-            else:
-                print(
-                    f"[SkyblockClient][Cache] UUID for '{username}' expired in cache (Age: {int(current_time - timestamp)}s)")
+        cached_uuid = self.cache.get_uuid(username)
+        if cached_uuid:
+            return cached_uuid
 
         # If not in cache or cache expired, make API request
         if not self.session or self.session.closed:
@@ -60,7 +55,7 @@ class SkyblockClient:
                         print(f"[SkyblockClient][API] Mojang Response JSON does not contain 'id' for '{username}'.")
                     else:
                         # Store in cache
-                        self.uuid_cache[username] = (uuid, current_time)
+                        self.cache.set_uuid(username, uuid)
                         print(f"[SkyblockClient][Cache] UUID for '{username}' stored in cache.")
                     return uuid
                 elif response.status == 204:
@@ -80,19 +75,12 @@ class SkyblockClient:
             return None
 
     async def get_skyblock_data(self, uuid: str) -> Optional[List[Dict[str, Any]]]:
-        """Fetches SkyBlock profile data for a given UUID using Hypixel API or cache."""
-        current_time = time.time()
+        # Fetches SkyBlock profile data for a given UUID using Hypixel API or cache.
 
         # Check cache first
-        if uuid in self.skyblock_data_cache:
-            cached_data, timestamp = self.skyblock_data_cache[uuid]
-            if current_time - timestamp < CACHE_TTL:
-                print(
-                    f"[SkyblockClient][Cache] Hypixel data for '{uuid}' found in cache (Age: {int(current_time - timestamp)}s)")  # Changed from German
-                return cached_data
-            else:
-                print(
-                    f"[SkyblockClient][Cache] Hypixel data for UUID '{uuid}' in cache has expired (Age: {int(current_time - timestamp)}s)")  # Changed from German
+        cached_data = self.cache.get_skyblock_data(uuid)
+        if cached_data is not None:
+            return cached_data
 
         # If not in cache or cache expired, make API request
         if not self.api_key:
@@ -119,15 +107,15 @@ class SkyblockClient:
                             profiles = data.get('profiles')
                             if profiles is None:
                                 print(
-                                    f"[SkyblockClient][API] Hypixel API success, but 'profiles' field is missing or is null for UUID '{uuid}'.")  # Changed from German
+                                    f"[SkyblockClient][API] Hypixel API success, but 'profiles' field is missing or is null for UUID '{uuid}'.")
                                 return None  # Explicitly return None if profiles key is missing or null
                             if not isinstance(profiles, list):
                                 print(
-                                    f"[SkyblockClient][API] Hypixel API success, but 'profiles' is not a list for UUID '{uuid}'. Type: {type(profiles)}")  # Changed from German
+                                    f"[SkyblockClient][API] Hypixel API success, but 'profiles' is not a list for UUID '{uuid}'. Type: {type(profiles)}")
                                 return None  # API contract violation
 
                             # Store in cache
-                            self.skyblock_data_cache[uuid] = (profiles, current_time)
+                            self.cache.set_skyblock_data(uuid, profiles)
                             print(f"[SkyblockClient][Cache] Hypixel data for UUID '{uuid}' stored in cache.")
 
                             return profiles
@@ -155,7 +143,7 @@ class SkyblockClient:
             return None
 
     def calculate_average_skill_level(self, profile: Dict[str, Any], player_uuid: str) -> Optional[float]:
-        """Calculates the estimated average skill level for a player in a specific profile."""
+        # Calculates the estimated average skill level for a player in a specific profile.
         profile_id = profile.get('profile_id', 'UNKNOWN_PROFILE_ID')
         print(f"[SkyblockClient][Calc] Calculating Skill Average for UUID {player_uuid} in profile {profile_id}")
         if not profile or player_uuid not in profile.get('members', {}):
@@ -193,7 +181,7 @@ class SkyblockClient:
             return 0.0
 
     def find_latest_profile(self, profiles: List[Dict[str, Any]], player_uuid: str) -> Optional[Dict[str, Any]]:
-        """Finds the profile with the most recent 'last_save' for the given player."""
+        # Finds the profile with the most recent 'last_save' for the given player.
         print(
             f"[SkyblockClient][Profile] Searching for the latest profile for UUID {player_uuid} out of {len(profiles)} profiles.")
         latest_profile = None
@@ -224,26 +212,16 @@ class SkyblockClient:
         return latest_profile
 
     def clear_cache(self):
-        """Clears all cached data."""
-        self.uuid_cache.clear()
-        self.skyblock_data_cache.clear()
+        # Clears all cached data.
+        self.cache.clear_all()
         print("[SkyblockClient][Cache] Cache cleared completely.")
 
     def invalidate_cache_for_user(self, username: str):
-        """Invalidates cache for a specific user."""
-        if username in self.uuid_cache:
-            uuid, _ = self.uuid_cache.pop(username)
-            print(f"[SkyblockClient][Cache] UUID Cache for '{username}' deleted.")
-
-            # Also remove associated skyblock data if it exists
-            if uuid in self.skyblock_data_cache:
-                self.skyblock_data_cache.pop(uuid)
-                print(f"[SkyblockClient][Cache] Hypixel Cache for UUID '{uuid}' deleted.")
-        else:
-            print(f"[SkyblockClient][Cache] No cache entry found for '{username}'.")
+        # Invalidates cache for a specific user.
+        self.cache.invalidate_player(username)
 
     async def get_skill_average(self, ign: str) -> Optional[Dict[str, Any]]:
-        """High-level function to get skill average result for an IGN."""
+        # High-level function to get skill average result for an IGN.
         print(f"[SkyblockClient] Fetching Skill Average for IGN: '{ign}'")
         player_uuid = await self.get_uuid_from_ign(ign)
         if not player_uuid:
