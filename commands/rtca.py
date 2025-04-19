@@ -25,7 +25,7 @@ class RtcaCommand:
         target_ca_str: str = '50'
         floor_str: str = 'm7'
 
-        if not args:
+        if not args or not args.strip():
             ign = ctx.author.name
 
             print(f"[DEBUG][RtcaCmd] No arguments (or only whitespace) provided, defaulting IGN to: {ign}")
