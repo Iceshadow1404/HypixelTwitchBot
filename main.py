@@ -62,7 +62,7 @@ if __name__ == "__main__":
             token=config['token'],
             prefix=config['prefix'],
             nickname=config['nickname'],
-            initial_channels=config['initial_channels'], # Changed from initial_channel
+            initial_channels=config['initial_channels'],
             hypixel_api_key=config['hypixel_api_key'] 
         )
         try:

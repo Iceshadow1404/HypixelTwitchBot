@@ -157,13 +157,13 @@ class SkyblockClient:
     def calculate_average_skill_level(self, profile: Dict[str, Any], player_uuid: str) -> Optional[float]:
         """Calculates the estimated average skill level for a player in a specific profile."""
         profile_id = profile.get('profile_id', 'UNKNOWN_PROFILE_ID')
-        print(f"[SkyblockClient][Calc] Berechne Skill Average für UUID {player_uuid} im Profil {profile_id}")
+        print(f"[SkyblockClient][Calc] Calculating Skill Average for UUID {player_uuid} in profile {profile_id}")
         if not profile or player_uuid not in profile.get('members', {}):
-            print(f"[SkyblockClient][Calc] Profil ungültig oder Spieler {player_uuid} nicht Mitglied im Profil {profile_id}.")
+            print(
+                f"[SkyblockClient][Calc] Profile invalid or player {player_uuid} not a member of profile {profile_id}.")
             return None
 
         member_data = profile['members'][player_uuid]
-        # print(f"[SkyblockClient][Calc] Member Data für {player_uuid} (Auszug): { {k: v for k, v in member_data.items() if 'experience_skill' in k or 'level' in k} }") # Optional Debugging
 
         total_level_estimate = 0
         skills_counted = 0
@@ -174,35 +174,33 @@ class SkyblockClient:
 
             # Hypixel doesn't always include the field if XP is 0
             if skill_xp is not None and skill_xp > 0:
-                level_approx = (skill_xp / 100)**0.5 # Simplistic non-linear scaling estimate
+                level_approx = (skill_xp / 100) ** 0.5  # Simplistic non-linear scaling estimate
                 total_level_estimate += level_approx
                 skills_counted += 1
             else:
                 # Treat missing skill or 0 XP skill as level 0 for average calculation
-                # print(f"[SkyblockClient][Calc] Skill '{skill_name}': Kein XP Feld ('{xp_field}') oder XP <= 0. Level = 0") # Optional Debugging
                 total_level_estimate += 0
-                skills_counted += 1 # Count it as a skill to average over
+                skills_counted += 1  # Count it as a skill to average over
 
         if skills_counted > 0:
             average = total_level_estimate / skills_counted
-            print(f"[SkyblockClient][Calc] Berechnung abgeschlossen: Total Level Estimate={total_level_estimate:.2f}, Skills Counted={skills_counted}, Average={average:.2f}")
+            print(
+                f"[SkyblockClient][Calc] Calculation complete: Total Level Estimate={total_level_estimate:.2f}, Skills Counted={skills_counted}, Average={average:.2f}")
             return average
         else:
-            print(f"[SkyblockClient][Calc] Berechnung nicht möglich: Keine Skills gezählt.")
+            print(f"[SkyblockClient][Calc] Calculation not possible: No skills counted.")
             # Return 0.0 if no skills found, consistent with treating missing as 0
             return 0.0
 
     def find_latest_profile(self, profiles: List[Dict[str, Any]], player_uuid: str) -> Optional[Dict[str, Any]]:
         """Finds the profile with the most recent 'last_save' for the given player."""
-        print(f"[SkyblockClient][Profile] Suche aktuellstes Profil für UUID {player_uuid} aus {len(profiles)} Profilen.")
-        # profile_summary = [ { 'id': p.get('profile_id'), 'cute_name': p.get('cute_name'), 'game_mode': p.get('game_mode') } for p in profiles]
-        # print(f"[SkyblockClient][Profile] Erhaltene Profile (Zusammenfassung): {json.dumps(profile_summary, indent=2)}") # Optional Debugging
-
+        print(
+            f"[SkyblockClient][Profile] Searching for the latest profile for UUID {player_uuid} out of {len(profiles)} profiles.")
         latest_profile = None
-        last_save = -1 # Use -1 to ensure any profile with 0 last_save is picked if it's the only one
+        last_save = -1  # Use -1 to ensure any profile with 0 last_save is picked if it's the only one
 
         if not profiles:
-            print("[SkyblockClient][Profile] Keine Profile zum Durchsuchen vorhanden.")
+            print("[SkyblockClient][Profile] No profiles available to search.")
             return None
 
         for profile in profiles:
@@ -211,21 +209,17 @@ class SkyblockClient:
             member_data = profile.get('members', {}).get(player_uuid)
 
             if member_data:
-                profile_last_save = member_data.get('last_save', 0) # Default to 0 if missing
-                # print(f"[SkyblockClient][Profile] Prüfe Profil '{cute_name}' (ID: {profile_id}): Last Save = {profile_last_save}") # Optional Debugging
+                profile_last_save = member_data.get('last_save', 0)  # Default to 0 if missing
                 if profile_last_save > last_save:
-                    # print(f"[SkyblockClient][Profile] -> Neuer letzter Speicherpunkt gefunden ({profile_last_save} > {last_save}). Wähle Profil '{cute_name}'.") # Optional Debugging
                     last_save = profile_last_save
                     latest_profile = profile
-                # else:
-                    # print(f"[SkyblockClient][Profile] -> Nicht aktueller als bisheriges Maximum ({last_save}).") # Optional Debugging
-            # else:
-                # print(f"[SkyblockClient][Profile] Prüfe Profil '{cute_name}' (ID: {profile_id}): Spieler {player_uuid} ist KEIN Mitglied.") # Optional Debugging
 
         if latest_profile:
-              print(f"[SkyblockClient][Profile] Aktuellstes Profil ausgewählt: '{latest_profile.get('cute_name')}' (ID: {latest_profile.get('profile_id')}) mit last_save {last_save}")
+            print(
+                f"[SkyblockClient][Profile] Selected latest profile: '{latest_profile.get('cute_name')}' (ID: {latest_profile.get('profile_id')}) with last_save {last_save}")
         else:
-              print(f"[SkyblockClient][Profile] Kein Profil gefunden, in dem Spieler {player_uuid} Mitglied ist und einen last_save Zeitstempel hat.")
+            print(
+                f"[SkyblockClient][Profile] No profile found where player {player_uuid} is a member and has a last_save timestamp.")
 
         return latest_profile
 
@@ -233,53 +227,54 @@ class SkyblockClient:
         """Clears all cached data."""
         self.uuid_cache.clear()
         self.skyblock_data_cache.clear()
-        print("[SkyblockClient][Cache] Cache wurde vollständig geleert.")
+        print("[SkyblockClient][Cache] Cache cleared completely.")
 
     def invalidate_cache_for_user(self, username: str):
         """Invalidates cache for a specific user."""
         if username in self.uuid_cache:
             uuid, _ = self.uuid_cache.pop(username)
-            print(f"[SkyblockClient][Cache] UUID Cache für '{username}' gelöscht.")
+            print(f"[SkyblockClient][Cache] UUID Cache for '{username}' deleted.")
 
             # Also remove associated skyblock data if it exists
             if uuid in self.skyblock_data_cache:
                 self.skyblock_data_cache.pop(uuid)
-                print(f"[SkyblockClient][Cache] Hypixel Cache für UUID '{uuid}' gelöscht.")
+                print(f"[SkyblockClient][Cache] Hypixel Cache for UUID '{uuid}' deleted.")
         else:
-            print(f"[SkyblockClient][Cache] Kein Cache-Eintrag für '{username}' gefunden.")
+            print(f"[SkyblockClient][Cache] No cache entry found for '{username}'.")
 
     async def get_skill_average(self, ign: str) -> Optional[Dict[str, Any]]:
         """High-level function to get skill average result for an IGN."""
-        print(f"[SkyblockClient] Hole Skill Average für IGN: '{ign}'")
+        print(f"[SkyblockClient] Fetching Skill Average for IGN: '{ign}'")
         player_uuid = await self.get_uuid_from_ign(ign)
         if not player_uuid:
-            return {"success": False, "reason": f"Minecraft-Konto für '{ign}' nicht gefunden."}
+            return {"success": False, "reason": f"Minecraft account not found for '{ign}'."}
 
-        print(f"[SkyblockClient] UUID für '{ign}' gefunden: {player_uuid}. Rufe Profildaten ab...")
+        print(f"[SkyblockClient] Found UUID for '{ign}': {player_uuid}. Fetching profile data...")
         profiles = await self.get_skyblock_data(player_uuid)
 
         if profiles is None:
-             # Specific error logged in get_skyblock_data
-             return {"success": False, "reason": f"Fehler beim Abrufen der Hypixel-Daten für '{ign}'."}
-        if not profiles: # Empty list means no profiles found
-             print(f"[SkyblockClient] Leere Profilliste für UUID {player_uuid} erhalten.")
-             return {"success": False, "reason": f"'{ign}' hat anscheinend noch keine SkyBlock-Profile."}
+            # Specific error logged in get_skyblock_data
+            return {"success": False, "reason": f"Error fetching Hypixel data for '{ign}'."}
+        if not profiles:  # Empty list means no profiles found
+            print(f"[SkyblockClient] Received empty profile list for UUID {player_uuid}.")
+            return {"success": False, "reason": f"'{ign}' doesn't seem to have any SkyBlock profiles yet."}
 
-        print(f"[SkyblockClient] {len(profiles)} Profile für '{ign}' gefunden. Suche aktuellstes...")
+        print(f"[SkyblockClient] Found {len(profiles)} profiles for '{ign}'. Searching for the latest...")
         latest_profile = self.find_latest_profile(profiles, player_uuid)
 
         if not latest_profile:
-             print(f"[SkyblockClient] Kein aktives Profil für '{ign}' gefunden.")
-             return {"success": False, "reason": f"Konnte kein aktives Profil für '{ign}' finden, in dem der Spieler Mitglied ist."}
+            print(f"[SkyblockClient] No active profile found for '{ign}'.")
+            return {"success": False,
+                    "reason": f"Could not find an active profile for '{ign}' where the player is a member."}
 
-        profile_name = latest_profile.get('cute_name', 'Unbekannt')
+        profile_name = latest_profile.get('cute_name', 'Unknown')
         profile_id_log = latest_profile.get('profile_id', 'N/A')
-        print(f"[SkyblockClient] Aktuellstes Profil: '{profile_name}' (ID: {profile_id_log}). Berechne Durchschnitt...")
+        print(f"[SkyblockClient] Latest profile: '{profile_name}' (ID: {profile_id_log}). Calculating average...")
 
         average_level = self.calculate_average_skill_level(latest_profile, player_uuid)
 
         if average_level is not None:
-            print(f"[SkyblockClient] Durchschnittliches Level für '{ign}' in '{profile_name}': {average_level:.2f}")
+            print(f"[SkyblockClient] Average level for '{ign}' in '{profile_name}': {average_level:.2f}")
             return {
                 "success": True,
                 "ign": ign,
@@ -289,5 +284,7 @@ class SkyblockClient:
             }
         else:
             # Should technically not happen if calculate_average_skill_level returns 0.0 on failure
-            print(f"[SkyblockClient][Error] Unerwarteter Fehler bei der Durchschnittsberechnung für '{ign}' in '{profile_name}'.")
-            return {"success": False, "reason": f"Konnte Skill-Level für '{ign}' im Profil '{profile_name}' nicht berechnen."}
+            print(
+                f"[SkyblockClient][Error] Unexpected error during average calculation for '{ign}' in '{profile_name}'.")
+            return {"success": False,
+                    "reason": f"Could not calculate skill levels for '{ign}' in profile '{profile_name}'."}
