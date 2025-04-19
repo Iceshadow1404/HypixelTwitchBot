@@ -25,7 +25,12 @@ class RtcaCommand:
         target_ca_str: str = '50'
         floor_str: str = 'm7'
 
-        if not args or not args.strip():
+        args = args.strip() if args else None
+        if args and not any(c.isalnum() for c in args):
+            # If args has no alphanumeric characters, treat it as None
+            args = None
+
+        if not args:
             ign = ctx.author.name
 
             print(f"[DEBUG][RtcaCmd] No arguments (or only whitespace) provided, defaulting IGN to: {ign}")
