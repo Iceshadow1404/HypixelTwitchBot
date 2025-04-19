@@ -14,7 +14,7 @@ class CommandsCog(commands.Cog):
     def __init__(self, bot: 'twitch.IceBot'):
         self.bot = bot
 
-    @commands.command(name='skills')
+    @commands.command(name='skills', aliases=['sa'])
     async def skills_command(self, ctx: commands.Context, *, args: str | None = None):
         """Displays the specified player's Hypixel SkyBlock skills."""
         parsed_args = await _parse_command_args(self.bot, ctx, args, 'skills')
