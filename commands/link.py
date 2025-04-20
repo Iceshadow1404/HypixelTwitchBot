@@ -4,9 +4,7 @@ import os
 from typing import Dict, Any, Optional
 import traceback
 from twitchio.ext import commands
-
-# File path for storing user links
-LINKS_FILE = "user_links.json"
+from constants import LINKS_FILE
 
 
 class LinkCommand:

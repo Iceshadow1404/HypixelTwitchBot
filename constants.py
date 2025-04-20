@@ -4,7 +4,7 @@ HYPIXEL_API_URL = "https://api.hypixel.net/v2/skyblock/profiles"
 HYPIXEL_AUCTION_URL = "https://api.hypixel.net/v2/skyblock/auction"
 HYPIXEL_ELECTION_URL = "https://api.hypixel.net/v2/resources/skyblock/election"
 
-LINKS_FILE = "user_links.json"
+LINKS_FILE = "/config/user_links.json"
 
 AVERAGE_SKILLS_LIST = [
     'farming', 'mining', 'combat', 'foraging', 'fishing',
