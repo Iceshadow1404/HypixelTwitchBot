@@ -37,8 +37,23 @@ class RtcaCommand:
         else:
             # This part now only runs if args contained non-whitespace characters
             parts = args.split()
-            ign = parts[0] 
-            remaining_parts = parts[1:]
+
+            # Check if any part is a floor identifier
+            has_floor = any(part.lower() in ['m6', 'm7'] for part in parts)
+            # Check if any part is a potential target CA
+            has_target_ca = any(part.isdigit() and int(part) < 100 for part in parts)
+
+            # If the first argument is a floor or target CA, use author's name as IGN
+            if parts[0].lower() in ['m6', 'm7'] or (parts[0].isdigit() and int(parts[0]) < 100):
+                ign = ctx.author.name
+                print(f"[DEBUG][RtcaCmd] First arg is floor or target: {parts[0]}, defaulting IGN to: {ign}")
+
+                # Now treat all parts as remaining parts to be identified
+                remaining_parts = parts
+            else:
+                # Original behavior: first part is the IGN
+                ign = parts[0]
+                remaining_parts = parts[1:]
 
             potential_profile_name = None
             potential_target_ca = None
@@ -50,13 +65,14 @@ class RtcaCommand:
                 part_lower = part.lower()
                 if part_lower in ['m6', 'm7'] and potential_floor is None:
                     potential_floor = part_lower
-                elif part.isdigit() and potential_target_ca is None:
+                elif part.isdigit() and int(part) < 100 and potential_target_ca is None:
                     potential_target_ca = part
-                elif potential_profile_name is None:
+                elif potential_profile_name is None and not (
+                        part_lower in ['m6', 'm7'] or (part.isdigit() and int(part) < 100)):
                     potential_profile_name = part
                 else:
                     unidentified_parts.append(part)
-            
+
             requested_profile_name = potential_profile_name
             if potential_target_ca is not None:
                 target_ca_str = potential_target_ca
