@@ -285,27 +285,32 @@ class Bot(commands.Bot):
         await self.handle_commands(message)
 
     async def _send_message(self, ctx: commands.Context, message: str):
-        # Helper function to send messages, incorporating workarounds for potential issues.
+        # Helper function to send messages with mention replies, incorporating workarounds for potential issues.
         # Truncate message for logging if it's too long
         log_message = message[:450] + '...' if len(message) > 450 else message
-        print(f"[DEBUG][Send] Attempting to send to #{ctx.channel.name}: {log_message}")
+        print(f"[DEBUG][Reply] Attempting to reply in #{ctx.channel.name}: {log_message}")
+
         try:
             await asyncio.sleep(0.3)
+
+            # Format message to include mention of the original sender
+            reply_message = f"@{ctx.author.name}, {message}"
 
             channel_name = ctx.channel.name
             channel = self.get_channel(channel_name)
             if channel:
-                print(f"[DEBUG][Send] Re-fetched channel object for {channel_name}. Sending via channel object.")
-                await channel.send(message)
-                print(f"[DEBUG][Send] Successfully sent message via channel object to #{channel_name}.")
+                print(f"[DEBUG][Reply] Re-fetched channel object for {channel_name}. Sending reply via channel object.")
+                await channel.send(reply_message)
+                print(f"[DEBUG][Reply] Successfully sent reply via channel object to #{channel_name}.")
             else:
                 # Fallback if channel couldn't be re-fetched (should not happen if connected)
-                print(f"[WARN][Send] Could not re-fetch channel object for {channel_name}. Falling back to ctx.send().")
-                await ctx.send(message)
-                print(f"[DEBUG][Send] Successfully sent message via ctx.send() to #{channel_name}.")
+                print(
+                    f"[WARN][Reply] Could not re-fetch channel object for {channel_name}. Falling back to ctx.send().")
+                await ctx.send(reply_message)
+                print(f"[DEBUG][Reply] Successfully sent reply via ctx.send() to #{channel_name}.")
 
-        except Exception as send_e:
-            print(f"[ERROR][Send] FAILED to send message to #{ctx.channel.name}: {send_e}")
+        except Exception as reply_e:
+            print(f"[ERROR][Reply] FAILED to send reply to #{ctx.channel.name}: {reply_e}")
             traceback.print_exc()
 
     async def _periodic_cache_cleanup(self):
