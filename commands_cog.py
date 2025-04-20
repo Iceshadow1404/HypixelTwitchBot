@@ -133,7 +133,7 @@ class CommandsCog(commands.Cog):
         """Displays the current dungeon run information for a player, if available."""
         await self.bot._currdungeon_command.currdungeon_command(ctx, args=args)
 
-    @commands.command(name='runstillcata')
+    @commands.command(name='runstillcata', aliases=["rtc"])
     async def runstillcata_command(self, ctx: commands.Context, *, args: str | None = None):
         """Calculates runs needed until a target Catacombs level."""
         await self.bot._runstillcata_command.runstillcata_command(ctx, args=args)
