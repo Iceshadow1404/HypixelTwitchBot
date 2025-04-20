@@ -32,6 +32,7 @@ from commands.rtca import RtcaCommand
 from commands.currdungeon import CurrDungeonCommand
 from commands.runstillcata import RunsTillCataCommand
 from commands_cog import CommandsCog
+from commands.link import LinkCommand
 
 
 def _select_profile(profiles: list[Profile], player_uuid: str, requested_profile_name: str | None) -> Profile | None:
@@ -95,6 +96,7 @@ class Bot(commands.Bot):
         self._rtca_command = RtcaCommand(self)
         self._currdungeon_command = CurrDungeonCommand(self)
         self._runstillcata_command = RunsTillCataCommand(self)
+        self._link_command = LinkCommand(self)
 
         # Store initial channels from .env to avoid leaving them
         self._initial_env_channels = [ch.lower() for ch in initial_channels]
@@ -129,7 +131,8 @@ class Bot(commands.Bot):
             traceback.print_exc()
 
     async def _get_player_profile_data(self, ctx: commands.Context, ign: str | None,
-                                       requested_profile_name: str | None = None, useCache = True) -> tuple[str, str, Profile] | None:
+                                       requested_profile_name: str | None = None, useCache=True) -> tuple[
+                                                                                                        str, str, Profile] | None:
         # Handles the common boilerplate for commands needing player profile data.
         # Uses the SkyblockClient with caching for API calls.
         # Returns (target_ign, player_uuid, selected_profile_data) or None if an error occurred.
@@ -144,10 +147,23 @@ class Bot(commands.Bot):
             self.session = aiohttp.ClientSession()
             self.skyblock_client = SkyblockClient(self.hypixel_api_key, self.session)
 
-        target_ign = ign if ign.rstrip() != "" else ctx.author.name
+        # Check if using empty or default IGN
+        print(ctx.author.name)
+        print('IGN', ign)
+
+        if not ign or ign.rstrip() == "" or ign == ctx.author.name:
+            # Try to get linked IGN first
+
+            linked_ign = self._link_command.get_linked_ign(ctx.author.name)
+            if linked_ign:
+                target_ign = linked_ign
+                print(f"[DEBUG] Using linked IGN '{linked_ign}' for user {ctx.author.name}")
+            else:
+                target_ign = ctx.author.name
+        else:
+            target_ign = ign
+
         target_ign = target_ign.lstrip('@')
-        # Use direct ctx.send for initial feedback message
-        # await ctx.send(f"Searching data for '{target_ign}'...")
 
         # Use cached client instead of utility functions
         player_uuid = await self.skyblock_client.get_uuid_from_ign(target_ign)

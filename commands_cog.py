@@ -136,4 +136,14 @@ class CommandsCog(commands.Cog):
     @commands.command(name='runstillcata')
     async def runstillcata_command(self, ctx: commands.Context, *, args: str | None = None):
         """Calculates runs needed until a target Catacombs level."""
-        await self.bot._runstillcata_command.runstillcata_command(ctx, args=args) 
+        await self.bot._runstillcata_command.runstillcata_command(ctx, args=args)
+
+    @commands.command(name='link')
+    async def link_command(self, ctx: commands.Context, *, args: str | None = None):
+        """Links your Twitch username to a Minecraft IGN."""
+        await self.bot._link_command.link_command(ctx, args=args)
+
+    @commands.command(name='unlink')
+    async def unlink_command(self, ctx: commands.Context):
+        """Removes the link between your Twitch username and Minecraft IGN."""
+        await self.bot._link_command.unlink_command(ctx)
