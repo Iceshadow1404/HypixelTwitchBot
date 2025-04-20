@@ -85,7 +85,7 @@ class RtcaCommand:
             await self.bot._send_message(ctx, f"Invalid argument: {e}. Usage: {self.bot._prefix}rtca <username> [profile_name] [target_ca=50] [floor=m7]")
             return
 
-        profile_data = await self.bot._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
+        profile_data = await self.bot._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name, useCache=False)
         if not profile_data:
             return 
 

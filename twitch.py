@@ -129,7 +129,7 @@ class Bot(commands.Bot):
             traceback.print_exc()
 
     async def _get_player_profile_data(self, ctx: commands.Context, ign: str | None,
-                                       requested_profile_name: str | None = None) -> tuple[str, str, Profile] | None:
+                                       requested_profile_name: str | None = None, useCache = True) -> tuple[str, str, Profile] | None:
         # Handles the common boilerplate for commands needing player profile data.
         # Uses the SkyblockClient with caching for API calls.
         # Returns (target_ign, player_uuid, selected_profile_data) or None if an error occurred.
@@ -158,7 +158,7 @@ class Bot(commands.Bot):
             return None
 
         # Use cached client instead of utility functions
-        profiles = await self.skyblock_client.get_skyblock_data(player_uuid)
+        profiles = await self.skyblock_client.get_skyblock_data(player_uuid, useCache)
         if profiles is None:  # API error occurred
             # Use _send_message for this potentially delayed error message
             await self._send_message(ctx,

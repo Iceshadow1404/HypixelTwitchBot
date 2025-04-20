@@ -74,12 +74,13 @@ class SkyblockClient:
             traceback.print_exc()
             return None
 
-    async def get_skyblock_data(self, uuid: str) -> Optional[List[Dict[str, Any]]]:
+    async def get_skyblock_data(self, uuid: str, useCache=True) -> Optional[List[Dict[str, Any]]]:
         # Fetches SkyBlock profile data for a given UUID using Hypixel API or cache.
 
         # Check cache first
         cached_data = self.cache.get_skyblock_data(uuid)
-        if cached_data is not None:
+
+        if cached_data is not None and useCache:
             return cached_data
 
         # If not in cache or cache expired, make API request
@@ -228,7 +229,7 @@ class SkyblockClient:
             return {"success": False, "reason": f"Minecraft account not found for '{ign}'."}
 
         print(f"[SkyblockClient] Found UUID for '{ign}': {player_uuid}. Fetching profile data...")
-        profiles = await self.get_skyblock_data(player_uuid)
+        profiles = await self.get_skyblock_data(player_uuid, useCache=True)
 
         if profiles is None:
             # Specific error logged in get_skyblock_data
