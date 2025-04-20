@@ -123,8 +123,16 @@ class RtcaCommand:
             print(f"[DEBUG][RtcaCmd] {target_ign} - Current CA: {current_ca:.2f}, Target CA: {target_level}") # Use validated int target_level
 
             if current_ca >= target_level:
-                 await self.bot._send_message(ctx, f"{target_ign} (CA {current_ca:.2f}) has already reached or surpassed the target Class Average {target_level}.")
-                 return
+                # Check if any class is still below target level
+                classes_below_target = [cn for cn, level in current_class_levels.items() if level < target_level]
+
+                if not classes_below_target:
+                    await self.bot._send_message(ctx,
+                                                 f"{target_ign} (CA {current_ca:.2f}) has already reached or surpassed the target Class Average {target_level}.")
+                    return
+                else:
+                    # Continue with the calculation even though CA is reached, because individual classes need leveling
+                    print(f"[DEBUG][RtcaCmd] CA target met but classes still below target: {classes_below_target}")
 
             target_level_for_milestone = target_level 
 
