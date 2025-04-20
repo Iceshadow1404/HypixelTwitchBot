@@ -75,6 +75,8 @@ async def process_auctions_command(ctx: commands.Context, ign: str | None = None
 
         current_message = message_prefix
         for auction in auctions:
+            if auction.get('claimed') == True:
+                continue
             item_name = auction.get('item_name', 'Unknown Item').replace("§.", "")  # Basic formatting code removal
             highest_bid = auction.get('highest_bid_amount', 0)
             if highest_bid == 0:
