@@ -37,6 +37,7 @@ app.post('/calculate-networth', async (req, res) => {
     const networth = await networthManager.getNetworth();
     const nonCosmeticNetworth = await networthManager.getNonCosmeticNetworth();
 
+    /*
     // Debug logging for the nonCosmeticNetworth object
     console.log('Debug - nonCosmeticNetworth object structure:');
     console.log(JSON.stringify(nonCosmeticNetworth, null, 2));
@@ -48,6 +49,8 @@ app.post('/calculate-networth', async (req, res) => {
     // Debug logging for the networth object for comparison
     console.log('Debug - networth object reference:');
     console.log('networth.networth:', networth.networth);
+    */
+
 
     // Return the calculation results
     const response = {
