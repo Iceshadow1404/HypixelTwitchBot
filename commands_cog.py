@@ -102,9 +102,9 @@ class CommandsCog(commands.Cog):
         await self.bot._slayer_command.slayer_command(ctx, args=args)
 
     @commands.command(name='networth', aliases=["nw"])
-    async def networth_command(self, ctx: commands.Context, *, ign: str | None = None):
-        """Informs the user that networth calculation is not supported."""
-        await self.bot._send_message(ctx, "Networth calculation is not supported. Please use mods like NEU or SkyHelper for accurate networth calculations.")
+    async def networth_command(self, ctx: commands.Context, *, args: str | None = None):
+        """Calculates and displays the specified player's networth."""
+        await self.bot._networth_command.networth_command(ctx, args=args)
 
     @commands.command(name='dexter')
     async def dexter_command(self, ctx: commands.Context):
