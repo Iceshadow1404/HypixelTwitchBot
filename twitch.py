@@ -172,7 +172,7 @@ class Bot(commands.Bot):
         if not player_uuid:
             # Use _send_message for this potentially delayed error message
             await self._send_message(ctx,
-                                     f"Could not find Minecraft account for '{target_ign}'. Please check the username.")
+                                     f"Could not find Minecraft account for '{target_ign}'. Please check the username. You can use #link IGN to link your Twitch account to your Minecraft IGN")
             return None
 
         # Use cached client instead of utility functions
