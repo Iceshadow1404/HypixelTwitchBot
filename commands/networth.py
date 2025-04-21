@@ -49,7 +49,6 @@ class NetworthCommand:
             networth_info = await self._send_to_node_service(request_data)
 
             if networth_info and networth_info.get('success'):
-                print(networth_info)
 
                 # Extract networth data
                 total_networth = networth_info.get('networth', 0)
@@ -63,8 +62,6 @@ class NetworthCommand:
                 formatted_purse = self._format_number(purse)
                 formatted_bank = self._format_number(bank)
                 formatted_nonCosmetic = self._format_number(nonCosmeticNetworth)
-
-                print(nonCosmeticNetworth, formatted_nonCosmetic)
 
                 # Prepare response message
                 response = f"Networth for {target_ign} ({profile_name}): {formatted_total}"
