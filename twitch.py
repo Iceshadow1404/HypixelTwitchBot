@@ -33,6 +33,7 @@ from commands.currdungeon import CurrDungeonCommand
 from commands.runstillcata import RunsTillCataCommand
 from commands_cog import CommandsCog
 from commands.link import LinkCommand
+from commands.networth import NetworthCommand
 
 
 def _select_profile(profiles: list[Profile], player_uuid: str, requested_profile_name: str | None) -> Profile | None:
@@ -97,6 +98,7 @@ class Bot(commands.Bot):
         self._currdungeon_command = CurrDungeonCommand(self)
         self._runstillcata_command = RunsTillCataCommand(self)
         self._link_command = LinkCommand(self)
+        self._networth_command = NetworthCommand(self)
 
         # Store initial channels from .env to avoid leaving them
         self._initial_env_channels = [ch.lower() for ch in initial_channels]
