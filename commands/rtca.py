@@ -17,9 +17,6 @@ class RtcaCommand:
         """
         print(f"[COMMAND] Rtca command triggered by {ctx.author.name}: {args}")
 
-        # Strip whitespace from args. If args becomes empty, treat as None.
-        args = args.strip() if args else None
-
         ign: str | None = None
         requested_profile_name: str | None = None
         target_ca_str: str = '50'
@@ -86,11 +83,6 @@ class RtcaCommand:
 
         target_level: int
         try:
-            # Validate floor
-            if floor_str not in ['m6', 'm7']:
-                raise ValueError("Invalid floor. Please specify 'm6' or 'm7'.")
-            print(f"[DEBUG][RtcaCmd] Validated floor_str: {floor_str}")
-
             # Validate target level (must be an integer)
             target_level = int(target_ca_str)
             if not 1 <= target_level <= 99: 
@@ -239,15 +231,15 @@ class RtcaCommand:
             # Prepare items for sorting (only those with > 0 runs)
             items_to_sort = [(cn, count) for cn, count in active_runs_per_class.items() if count > 0]
 
-            # Sort: selected class first, then by descending run count
+            # Sort by descending run count
             sorted_items = sorted(
                 items_to_sort,
-                key=lambda item: (item[0].lower() != selected_class_lower if selected_class_lower else True, -item[1]) # Handle case where selected_class is None
+                key=lambda item: -item[1]  # Sort only by run count in descending order
             )
 
             # Build the breakdown string from sorted items
             breakdown_parts = [
-                f"{'🔸 ' if selected_class_lower and cn.lower() == selected_class_lower else ''}{cn.capitalize()}: {count}" 
+                f"{'🔸 ' if selected_class_lower and cn.lower() == selected_class_lower else ''}{cn.capitalize()}: {count}{' 🔸' if selected_class_lower and cn.lower() == selected_class_lower else ''}"
                 for cn, count in sorted_items
             ]
             breakdown_str = " | ".join(breakdown_parts) if breakdown_parts else ""
