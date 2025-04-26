@@ -107,7 +107,24 @@ class RtcaCommand:
             player_classes_data = dungeons_data.get('player_classes', None)
 
             selected_class = dungeons_data.get('selected_dungeon_class')
-            selected_class_lower = selected_class.lower() if selected_class else None 
+            selected_class_lower = selected_class.lower() if selected_class else None
+
+            heart_of_gold = member_data.get('player_data', {}).get('perks', {}).get('heart_of_gold', 0)
+            unbridled_rage = member_data.get('player_data', {}).get('perks', {}).get('unbridled_rage', 0)
+            cold_efficiency = member_data.get('player_data', {}).get('perks', {}).get('cold_efficiency', 0)
+            toxophilite = member_data.get('player_data', {}).get('perks', {}).get('toxophilite', 0)
+            diamond_in_the_rough = member_data.get('player_data', {}).get('perks', {}).get('diamond_in_the_rough', 0)
+
+            class_exp_boosts: dict[str, float] = {
+                'healer': (heart_of_gold * 2) / 100 + 1,
+                'berserk': (unbridled_rage * 2) / 100 + 1,
+                'mage': (cold_efficiency * 2) / 100 + 1,
+                'archer': (toxophilite * 2) / 100 + 1,
+                'tank': (diamond_in_the_rough * 2) / 100 + 1,
+            }
+
+            print(class_exp_boosts)
+
             print(f"[DEBUG][RtcaCmd] Fetched selected class from profile '{profile_name}': {selected_class}")
 
             if player_classes_data is None:
@@ -151,8 +168,15 @@ class RtcaCommand:
                 xp_per_run = self.bot.constants.BASE_M7_CLASS_XP
                 selected_floor_name = "M7"
                 
-            # --- Optional XP boost logic (kept commented out) ---
-            xp_per_run *= 1.06 # CURRENT FIX NEED TO IMPLEMENT CLASS XP BOOSTS
+            """# --- Optional XP boost logic (kept commented out) ---
+            xp_per_run *= 1.06 # CURRENT FIX NEED TO IMPLEMENT CLASS XP BOOSTS"""
+
+            # Apply class-specific XP boost if the selected class is known
+            if selected_class_lower in class_exp_boosts:
+                xp_per_run *= class_exp_boosts[selected_class_lower] ## TODO per class XP boost for passive XP gain
+                print(f"[DEBUG][RtcaCmd] Applied XP boost for {selected_class_lower}: New XP/run = {xp_per_run:,.2f}")
+            else:
+                print(f"[DEBUG][RtcaCmd] No XP boost applied (Unknown or missing class: {selected_class_lower})")
 
             if xp_per_run <= 0: # Safety check
                 print(f"[ERROR][RtcaCmd] Base XP per run is zero or negative for {selected_floor_name}.")
@@ -209,8 +233,8 @@ class RtcaCommand:
                 if bottleneck_class is None: # Should not happen if xp_needed_dict is not empty
                     print("[ERROR][RtcaSim] Could not determine bottleneck class during simulation. Breaking loop.")
                     break
-                
-                active_runs_per_class[bottleneck_class] += 1 
+
+                active_runs_per_class[bottleneck_class] += 1
 
                 # Apply XP gains and update needed XP for the next iteration
                 next_xp_needed = {}
@@ -219,7 +243,7 @@ class RtcaCommand:
                     remaining_needed = needed - xp_gained
                     if remaining_needed > 0:
                         next_xp_needed[cn] = remaining_needed
-                
+
                 xp_needed_dict = next_xp_needed
 
             print(f"[DEBUG][RtcaSim] --- Simulation Finished after {iteration} iterations ---")
