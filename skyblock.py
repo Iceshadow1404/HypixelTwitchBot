@@ -93,7 +93,7 @@ class SkyblockClient:
 
         params = {"key": self.api_key, "uuid": uuid}
         print(
-            f"[SkyblockClient][API] Hypixel request for UUID '{uuid}' to: {HYPIXEL_API_URL} with parameters: key=HIDDEN, uuid={uuid}")
+            f"[SkyblockClient][API] Hypixel request for UUID '{uuid}' to: {HYPIXEL_API_URL}")
         try:
             async with (self.session.get(HYPIXEL_API_URL, params=params) as response):
                 print(f"[SkyblockClient][API] Hypixel Response for UUID '{uuid}': Status {response.status}")
@@ -103,7 +103,6 @@ class SkyblockClient:
                         data = json.loads(response_text)
                         with open("data.json", 'w') as f:
                             json.dump(data, f, indent=4)
-                        # print(f"[SkyblockClient][API] Hypixel Antwort JSON (UUID: {uuid}): {json.dumps(data, indent=2)}") # Optional: Debugging
                         if data.get("success"):
                             profiles = data.get('profiles')
                             if profiles is None:

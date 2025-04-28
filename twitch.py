@@ -34,7 +34,7 @@ from commands.runstillcata import RunsTillCataCommand
 from commands_cog import CommandsCog
 from commands.link import LinkCommand
 from commands.networth import NetworthCommand
-
+from commands.guild import GuildCommand
 
 def _select_profile(profiles: list[Profile], player_uuid: str, requested_profile_name: str | None) -> Profile | None:
     # Selects a profile from a list based on requested cute_name or falls back to the latest.
@@ -99,6 +99,7 @@ class Bot(commands.Bot):
         self._runstillcata_command = RunsTillCataCommand(self)
         self._link_command = LinkCommand(self)
         self._networth_command = NetworthCommand(self)
+        self._guild_command = GuildCommand(self)
 
         # Store initial channels from .env to avoid leaving them
         self._initial_env_channels = [ch.lower() for ch in initial_channels]
@@ -150,9 +151,6 @@ class Bot(commands.Bot):
             self.skyblock_client = SkyblockClient(self.hypixel_api_key, self.session)
 
         # Check if using empty or default IGN
-        print(ctx.author.name)
-        print('IGN', ign)
-
         if not ign or ign.rstrip() == "" or ign == ctx.author.name:
             # Try to get linked IGN first
 

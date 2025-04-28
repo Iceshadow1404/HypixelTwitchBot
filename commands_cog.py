@@ -8,7 +8,7 @@ from commands.skills import process_skills_command
 from commands.auction_house import process_auctions_command
 from commands.cata import process_dungeon_command
 from commands.sblvl import process_sblvl_command
-
+from commands.guild import process_guild_command
 
 class CommandsCog(commands.Cog):
     def __init__(self, bot: 'twitch.IceBot'):
@@ -147,3 +147,9 @@ class CommandsCog(commands.Cog):
     async def unlink_command(self, ctx: commands.Context):
         """Removes the link between your Twitch username and Minecraft IGN."""
         await self.bot._link_command.unlink_command(ctx)
+
+    @commands.command(name='guild', aliases=['g'])
+    async def guild_command(self, ctx: commands.Context, *, args: str | None = None):
+        """Displays the Hypixel guild the specified player is in."""
+        # Call the processing function from guild.py, passing context and args
+        await process_guild_command(ctx, args=args)
