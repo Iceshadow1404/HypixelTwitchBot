@@ -54,3 +54,33 @@ class MayorCommand:
             print(f"[ERROR][MayorCmd] Unexpected error: {e}")
             traceback.print_exc()
             await self.bot._send_message(ctx, "An unexpected error occurred while fetching mayor information.")
+
+    async def mayor_command_logic(self):
+        """Fetches the current SkyBlock mayor and perks and returns the data."""
+        print(f"[DEBUG][API] Fetching SkyBlock election data from {constants.HYPIXEL_ELECTION_URL}")
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(constants.HYPIXEL_ELECTION_URL) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if data.get("success"):
+                            mayor_data = data.get('mayor')
+                            return mayor_data  # Return the mayor data
+                        else:
+                            print("[ERROR][MayorCmd] API request failed (success=false). Could not fetch election data.")
+                            return None
+                    else:
+                        print(f"[ERROR][MayorCmd] Error fetching election data. API returned status {response.status}.")
+                        return None
+
+        except aiohttp.ClientError as e:
+            print(f"[ERROR][API] Network error fetching election data: {e}")
+            return None
+        except json.JSONDecodeError:
+             print(f"[ERROR][API] Failed to parse JSON from election API.")
+             return None
+        except Exception as e:
+            print(f"[ERROR][MayorCmd] Unexpected error: {e}")
+            traceback.print_exc()
+            return None
