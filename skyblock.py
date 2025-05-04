@@ -5,17 +5,10 @@ import traceback
 from typing import Optional, Dict, List, Any
 import time
 
-from constants import CACHE_TTL
+import utils
+from constants import CACHE_TTL, MOJANG_API_URL, HYPIXEL_API_URL, AVERAGE_SKILLS_LIST
 from cache import SkyblockCache
-
-# --- Constants ---
-MOJANG_API_URL = "https://api.mojang.com/users/profiles/minecraft/{username}"
-HYPIXEL_API_URL = "https://api.hypixel.net/v2/skyblock/profiles"
-AVERAGE_SKILLS_LIST = [
-    'farming', 'mining', 'combat', 'foraging', 'fishing',
-    'enchanting', 'alchemy', 'taming', 'carpentry'
-]
-
+from profiletyping import Profile
 
 class SkyblockClient:
     # Handles interactions with Mojang and Hypixel APIs for SkyBlock data.
@@ -120,7 +113,7 @@ class SkyblockClient:
 
                             return profiles
                         else:
-                            reason = data.get('cause', 'Unbekannter Grund')
+                            reason = data.get('cause', 'Unknown Reason')
                             print(
                                 f"[SkyblockClient][API] Hypixel API Error for UUID '{uuid}': Success=False, Reason: {reason}")
                             return None
@@ -197,7 +190,7 @@ class SkyblockClient:
             member_data = profile.get('members', {}).get(player_uuid)
 
             if member_data:
-                profile_last_save = member_data.get('last_save', 0)  # Default to 0 if missing
+                profile_last_save = member_data.get('last_save', 0)
                 if profile_last_save > last_save:
                     last_save = profile_last_save
                     latest_profile = profile
@@ -266,3 +259,34 @@ class SkyblockClient:
                 f"[SkyblockClient][Error] Unexpected error during average calculation for '{ign}' in '{profile_name}'.")
             return {"success": False,
                     "reason": f"Could not calculate skill levels for '{ign}' in profile '{profile_name}'."}
+
+
+    def _select_profile(profiles: list[Profile], player_uuid: str, requested_profile_name: str | None) -> Profile | None:
+        # Selects a profile from a list based on requested cute_name or falls back to the latest.
+
+        # Try to find by cute_name if requested
+        if requested_profile_name:
+            requested_name_lower = requested_profile_name.lower()
+            for profile in profiles:  # Iterate directly over the list
+                cute_name = profile.get('cute_name')
+                if cute_name and cute_name.lower() == requested_name_lower:
+                    # Check if player is actually a member of this profile
+                    if player_uuid in profile.get('members', {}):
+                        print(f"[DEBUG][ProfileSelect] Found matching profile by cute_name: '{cute_name}'")
+                        return profile  # Return the matched profile
+                    else:
+                        # This case should be rare if the API returns profiles correctly
+                        print(
+                            f"[WARN][ProfileSelect] Found profile '{cute_name}' matching request, but player UUID {player_uuid} is not a member.")
+                        pass  # Let it fall back to latest profile logic
+
+            # If loop finishes without finding a match by name
+            print(
+                f"[WARN][ProfileSelect] Requested profile name '{requested_profile_name}' not found or player not member. Falling back to latest profile.")
+
+        latest_profile = utils._find_latest_profile(profiles, player_uuid)
+        if latest_profile:
+            print(f"[DEBUG][ProfileSelect] Using latest profile: '{latest_profile.get('cute_name', 'Unknown')}'")
+        else:
+            print("[DEBUG][ProfileSelect] Could not find any latest profile.")
+        return latest_profile

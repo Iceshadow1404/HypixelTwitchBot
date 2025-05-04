@@ -1,22 +1,16 @@
 # twitch.py
 import asyncio
-import json
-import logging
 import traceback
 from datetime import datetime
-import math
 import re
 from typing import TypeAlias
 import os
 import aiohttp
 from twitchio.ext import commands
-import time
-
 from profiletyping import Profile
 
 import constants
 import utils
-from utils import _find_latest_profile, _get_uuid_from_ign, _get_skyblock_data, _parse_command_args
 from skyblock import SkyblockClient
 from commands.kuudra import KuudraCommand
 from commands.classaverage import ClassAverageCommand
@@ -35,38 +29,6 @@ from commands_cog import CommandsCog
 from commands.link import LinkCommand
 from commands.networth import NetworthCommand
 from commands.guild import GuildCommand
-
-def _select_profile(profiles: list[Profile], player_uuid: str, requested_profile_name: str | None) -> Profile | None:
-    # Selects a profile from a list based on requested cute_name or falls back to the latest.
-
-    # Try to find by cute_name if requested
-    if requested_profile_name:
-        requested_name_lower = requested_profile_name.lower()
-        for profile in profiles:  # Iterate directly over the list
-            cute_name = profile.get('cute_name')
-            if cute_name and cute_name.lower() == requested_name_lower:
-                # Check if player is actually a member of this profile
-                if player_uuid in profile.get('members', {}):
-                    print(f"[DEBUG][ProfileSelect] Found matching profile by cute_name: '{cute_name}'")
-                    return profile  # Return the matched profile
-                else:
-                    # This case should be rare if the API returns profiles correctly
-                    print(
-                        f"[WARN][ProfileSelect] Found profile '{cute_name}' matching request, but player UUID {player_uuid} is not a member.")
-                    pass  # Let it fall back to latest profile logic
-
-        # If loop finishes without finding a match by name
-        print(
-            f"[WARN][ProfileSelect] Requested profile name '{requested_profile_name}' not found or player not member. Falling back to latest profile.")
-
-    # Fallback: Find the latest profile (original logic)
-    # Assuming _find_latest_profile also expects a list of profiles
-    latest_profile = utils._find_latest_profile(profiles, player_uuid)
-    if latest_profile:
-        print(f"[DEBUG][ProfileSelect] Using latest profile: '{latest_profile.get('cute_name', 'Unknown')}'")
-    else:
-        print("[DEBUG][ProfileSelect] Could not find any latest profile.")
-    return latest_profile
 
 
 class Bot(commands.Bot):
@@ -187,7 +149,7 @@ class Bot(commands.Bot):
             return None
 
         # Select the profile using the helper function
-        selected_profile = _select_profile(profiles, player_uuid, requested_profile_name)
+        selected_profile = SkyblockClient._select_profile(profiles, player_uuid, requested_profile_name)
 
         if not selected_profile:
             # If _select_profile returned None (e.g., no latest found after fallback)
@@ -291,7 +253,6 @@ class Bot(commands.Bot):
         await self.handle_commands(message)
 
     async def _send_message(self, ctx: commands.Context, message: str):
-        # Helper function to send messages with mention replies, incorporating workarounds for potential issues.
         # Truncate message for logging if it's too long
         log_message = message[:450] + '...' if len(message) > 450 else message
         print(f"[DEBUG][Reply] Attempting to reply in #{ctx.channel.name}: {log_message}")
@@ -328,15 +289,12 @@ class Bot(commands.Bot):
             try:
                 await asyncio.sleep(cleanup_interval)
                 if self.skyblock_client and hasattr(self.skyblock_client, 'cache'):
-                    # Get stats before cleanup
+
                     stats_before = self.skyblock_client.cache.get_stats()
 
-                    # Run the cleanup
                     uuid_removed, skyblock_removed = self.skyblock_client.cache.cleanup_expired()
 
-                    # Get stats after cleanup
                     stats_after = self.skyblock_client.cache.get_stats()
-
                     print(
                         f"[INFO][CacheCleanup] Cache cleaned. Before: {stats_before['uuid_cache_size']} UUID entries, "
                         f"{stats_before['skyblock_data_cache_size']} Skyblock data entries. "
@@ -563,7 +521,6 @@ class Bot(commands.Bot):
                         data = await response.json()
                         token = data.get("access_token")
                         if token:
-                            # print("[DEBUG] Successfully obtained/refreshed Twitch access token.")
                             return token
                         else:
                             print("[ERROR] Got 200 OK but no access token in response.")
