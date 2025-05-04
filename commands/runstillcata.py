@@ -4,6 +4,7 @@ from twitchio.ext import commands
 
 from calculations import calculate_dungeon_level, _get_xp_for_target_level
 from constants import BASE_M6_XP, BASE_M7_XP
+from commands.mayor import MayorCommand
 
 class RunsTillCataCommand:
     def __init__(self, bot):
@@ -115,6 +116,14 @@ class RunsTillCataCommand:
             if xp_per_run <= 0:
                  await self.bot.send_message(ctx, "Invalid XP per run configured.")
                  return
+
+             # --- Mayor Check ---
+            mayor_command = MayorCommand(self.bot)
+            mayor_data = await mayor_command.mayor_command_logic()
+            print(mayor_data, 'MAYOR')
+            if mayor_data and mayor_data.get("name") == "Derpy":
+                print(mayor_data.get("name"))
+                xp_per_run *= 1.5  # Apply Derpy's XP boost
 
             runs_needed = math.ceil(xp_needed / xp_per_run)
 
