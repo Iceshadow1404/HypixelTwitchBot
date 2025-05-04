@@ -7,8 +7,7 @@ if TYPE_CHECKING:
     from twitch import IceBot
 
 from utils import _parse_command_args
-
-HYPIXEL_GUILD_API_URL = "https://api.hypixel.net/v2/guild"
+from constants import HYPIXEL_GUILD_API_URL
 
 class GuildCommand:
     def __init__(self, bot: 'IceBot'):

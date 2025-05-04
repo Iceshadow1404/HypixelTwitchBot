@@ -2,8 +2,8 @@ import traceback
 import math
 from twitchio.ext import commands
 
-from utils import _parse_command_args
 from calculations import calculate_dungeon_level, _get_xp_for_target_level
+from constants import BASE_M6_XP, BASE_M7_XP
 
 class RunsTillCataCommand:
     def __init__(self, bot):
@@ -31,7 +31,6 @@ class RunsTillCataCommand:
                 # Now treat all parts as remaining parts to be identified
                 remaining_parts = parts
             else:
-                # Original behavior: first part is the IGN
                 ign = parts[0]
                 remaining_parts = parts[1:]
 
@@ -62,8 +61,8 @@ class RunsTillCataCommand:
                 usage_message = f"Too many or ambiguous arguments: {unidentified_parts}. Usage: {self.bot._prefix}runstillcata <username> [profile_name] [target_level] [floor=m7]"
                 await self.bot._send_message(ctx, usage_message)
                 return
-             
-        target_level: int | None = None 
+
+        target_level: int | None = None
         try:
             # Validate floor
             if floor_str not in ['m6', 'm7']:
@@ -72,7 +71,7 @@ class RunsTillCataCommand:
 
             if target_level_str:
                 target_level = int(target_level_str)
-                if not 1 <= target_level <= 99: 
+                if not 1 <= target_level <= 99:
                     raise ValueError("Target level must be between 1 and 99.")
                 print(f"[DEBUG][RunsTillCataCmd] Validated target_level: {target_level}")
 
@@ -82,7 +81,7 @@ class RunsTillCataCommand:
 
         profile_data = await self.bot._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
         if not profile_data:
-            return 
+            return
 
         target_ign, player_uuid, selected_profile = profile_data
         profile_name = selected_profile.get('cute_name', 'Unknown')
@@ -92,14 +91,14 @@ class RunsTillCataCommand:
             dungeons_data = member_data.get('dungeons', {}).get('dungeon_types', {}).get('catacombs', {})
             current_xp = dungeons_data.get('experience', 0)
             current_level = calculate_dungeon_level(self.bot.leveling_data, current_xp)
-            
+
             if target_level is None:
-                target_level_calc = math.ceil(current_level) 
+                target_level_calc = math.ceil(current_level)
                 if target_level_calc == math.floor(current_level):
                     target_level_calc += 1
             else:
                 target_level_calc = target_level
-                
+
             xp_for_target_level = _get_xp_for_target_level(self.bot.leveling_data, target_level_calc)
             xp_needed = xp_for_target_level - current_xp
 
@@ -107,12 +106,12 @@ class RunsTillCataCommand:
                 await self.bot._send_message(ctx, f"{target_ign} has already reached Catacombs level {target_level_calc}!")
                 return
             if floor_str == 'm6':
-                xp_per_run = 180000 # Base M6 Cata XP
+                xp_per_run = BASE_M6_XP # Base M6 Cata XP
                 floor_name = "M6"
             else: 
-                xp_per_run = 500000 # Base M7 Cata XP
+                xp_per_run = BASE_M7_XP # Base M7 Cata XP
                 floor_name = "M7"
-            
+
             if xp_per_run <= 0:
                  await self.bot._send_message(ctx, "Invalid XP per run configured.")
                  return

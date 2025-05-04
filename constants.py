@@ -4,6 +4,7 @@ HYPIXEL_API_URL = "https://api.hypixel.net/v2/skyblock/profiles"
 HYPIXEL_AUCTION_URL = "https://api.hypixel.net/v2/skyblock/auction"
 HYPIXEL_ELECTION_URL = "https://api.hypixel.net/v2/resources/skyblock/election"
 HYPIXEL_MUSEUM_URL = "https://api.hypixel.net/v2/skyblock/museum"
+HYPIXEL_GUILD_API_URL = "https://api.hypixel.net/v2/guild"
 
 LINKS_FILE = "/config/user_links.json"
 
@@ -19,6 +20,9 @@ ESSENCE_TYPES = ['WITHER', 'DRAGON', 'DIAMOND', 'SPIDER', 'UNDEAD', 'GOLD', 'ICE
 SLAYER_BOSS_KEYS = ['zombie', 'spider', 'wolf', 'enderman', 'blaze', 'vampire']
 BASE_M6_CLASS_XP = 105000 # From runs-to-class-average.ts
 BASE_M7_CLASS_XP = 340000 # From runs-to-class-average.ts
+
+BASE_M6_XP = 180000
+BASE_M7_XP = 500000
 
 MAX_MESSAGE_LENGTH = 480 # Approx limit to avoid Twitch cutting messages
 
