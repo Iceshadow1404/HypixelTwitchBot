@@ -3,6 +3,7 @@ MOJANG_API_URL = "https://mowojang.matdoes.dev/{username}"
 HYPIXEL_API_URL = "https://api.hypixel.net/v2/skyblock/profiles"
 HYPIXEL_AUCTION_URL = "https://api.hypixel.net/v2/skyblock/auction"
 HYPIXEL_ELECTION_URL = "https://api.hypixel.net/v2/resources/skyblock/election"
+HYPIXEL_MUSEUM_URL = "https://api.hypixel.net/v2/skyblock/museum"
 
 LINKS_FILE = "/config/user_links.json"
 

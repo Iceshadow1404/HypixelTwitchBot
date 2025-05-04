@@ -160,3 +160,14 @@ async def _parse_command_args(bot, ctx: commands.Context, args: str | None, comm
         return None, None
 
     return ign.rstrip(), requested_profile_name
+
+def format_number(num: float) -> str:
+    """Format a number with suffix (k, m, b)."""
+    if num >= 1_000_000_000:
+        return f"{num / 1_000_000_000:.2f}B"
+    elif num >= 1_000_000:
+        return f"{num / 1_000_000:.2f}M"
+    elif num >= 1_000:
+        return f"{num / 1_000:.2f}K"
+    else:
+        return f"{num:.0f}"
