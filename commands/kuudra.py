@@ -20,7 +20,7 @@ class KuudraCommand:
             if len(parts) > 1:
                 requested_profile_name = parts[1]
             if len(parts) > 2:
-                await self.bot._send_message(ctx, f"Too many arguments. Usage: {self.bot._prefix}kuudra <username> [profile_name]")
+                await self.bot.send_message(ctx, f"Too many arguments. Usage: {self.bot._prefix}kuudra <username> [profile_name]")
                 return
 
         profile_data = await self.bot._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
@@ -42,7 +42,7 @@ class KuudraCommand:
 
             if kuudra_completed_tiers is None or not kuudra_completed_tiers: # Check for None or empty dict
                 print(f"[INFO][KuudraCmd] No Kuudra completions recorded for {target_ign} in profile {profile_name}.")
-                await self.bot._send_message(ctx, f"No Kuudra completions recorded for {target_ign} in profile {profile_name}.")
+                await self.bot.send_message(ctx, f"No Kuudra completions recorded for {target_ign} in profile {profile_name}.")
                 return
 
             # Format output
@@ -54,9 +54,9 @@ class KuudraCommand:
                 completions.append(f"{tier_name} {count}")
                 total_score += count * self.bot.constants.KUUDRA_TIER_POINTS.get(tier, 0) # Use .get for safety
 
-            await self.bot._send_message(ctx, f"{target_ign}'s Kuudra completions in profile '{profile_name}': {', '.join(completions)} | Score: {total_score:,}")
+            await self.bot.send_message(ctx, f"{target_ign}'s Kuudra completions in profile '{profile_name}': {', '.join(completions)} | Score: {total_score:,}")
 
         except Exception as e:
             print(f"[ERROR][KuudraCmd] Unexpected error processing Kuudra data: {e}")
             traceback.print_exc()
-            await self.bot._send_message(ctx, "An unexpected error occurred while fetching Kuudra completions.")
+            await self.bot.send_message(ctx, "An unexpected error occurred while fetching Kuudra completions.")

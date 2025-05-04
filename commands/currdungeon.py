@@ -37,7 +37,7 @@ class CurrDungeonCommand:
 
             if not runs_list:
                 print(f"[INFO][CurrDungeonCmd] No runs found for {target_ign} in profile {profile_name}.")
-                await self.bot._send_message(ctx, f"'{target_ign}' has no recorded dungeon runs in profile '{profile_name}'.")
+                await self.bot.send_message(ctx, f"'{target_ign}' has no recorded dungeon runs in profile '{profile_name}'.")
                 return
 
             latest_run = None
@@ -51,7 +51,7 @@ class CurrDungeonCommand:
 
             if latest_run is None:
                 print(f"[INFO][CurrDungeonCmd] Could not determine the latest run for {target_ign} (no valid timestamps).")
-                await self.bot._send_message(ctx, f"Could not find a valid latest run for '{target_ign}' in profile '{profile_name}'.")
+                await self.bot.send_message(ctx, f"Could not find a valid latest run for '{target_ign}' in profile '{profile_name}'.")
                 return
 
             completion_timestamp_ms = latest_run.get('completion_ts', 0)
@@ -62,7 +62,7 @@ class CurrDungeonCommand:
             print(f"[DEBUG][CurrDungeonCmd] Latest Run TS: {completion_time_sec}, Current TS: {current_time_sec}, Diff: {time_diff_sec:.2f} sec")
 
             if time_diff_sec > 600:  # More than 10 minutes
-                await self.bot._send_message(ctx, f"{target_ign} didn't finish a run in the last 10min.")
+                await self.bot.send_message(ctx, f"{target_ign} didn't finish a run in the last 10min.")
                 return
 
             relative_time_str = self._format_relative_time(time_diff_sec)
@@ -91,12 +91,12 @@ class CurrDungeonCommand:
                 f"{target_ign}'s last run was {run_info} finished {relative_time_str}. "
                 f"Teammates: {teammates_str}"
             )
-            await self.bot._send_message(ctx, output_message)
+            await self.bot.send_message(ctx, output_message)
 
         except Exception as e:
             print(f"[ERROR][CurrDungeonCmd] Unexpected error processing current run for {target_ign}: {e}")
             traceback.print_exc()
-            await self.bot._send_message(ctx, f"An unexpected error occurred while checking the current run for '{target_ign}'.")
+            await self.bot.send_message(ctx, f"An unexpected error occurred while checking the current run for '{target_ign}'.")
 
     def _format_relative_time(self, time_diff_sec: float) -> str:
         """Formats a time difference in seconds into 'X seconds/minutes ago'."""

@@ -149,14 +149,14 @@ async def _parse_command_args(bot, ctx: commands.Context, args: str | None, comm
         if len(parts) > 1:
             requested_profile_name = parts[1]
         if len(parts) > 2:
-            # Use bot._send_message for sending messages
-            await bot._send_message(ctx, f"Too many arguments. Usage: {bot._prefix}{command_name} <username> [profile_name]")
+            # Use bot.send_message for sending messages
+            await bot.send_message(ctx, f"Too many arguments. Usage: {bot._prefix}{command_name} <username> [profile_name]")
             return None, None # Return None, None to indicate failure
 
     if ign is None:
         # This case should ideally not be reached if ctx.author.name is always valid
         print("[WARN][ParseArgs] IGN became None unexpectedly.")
-        await bot._send_message(ctx, "Could not determine username.")
+        await bot.send_message(ctx, "Could not determine username.")
         return None, None
 
     return ign.rstrip(), requested_profile_name

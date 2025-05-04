@@ -37,7 +37,7 @@ class EssenceCommand:
             if not all_essence_data:
                 print(f"[INFO][EssenceCmd] No essence data found for {target_ign} in profile {profile_name}.")
 
-                await self.bot._send_message(ctx, f"No essence data found for '{target_ign}' in profile '{profile_name}'.")
+                await self.bot.send_message(ctx, f"No essence data found for '{target_ign}' in profile '{profile_name}'.")
                 return
 
             essence_amounts = []
@@ -52,9 +52,9 @@ class EssenceCommand:
                 essence_amounts.append(f"{display_name}: {amount_str}")
 
             output_message = f"{target_ign} (Profile: '{profile_name}'): { ' | '.join(essence_amounts) }"
-            await self.bot._send_message(ctx, output_message)
+            await self.bot.send_message(ctx, output_message)
 
         except Exception as e:
             print(f"[ERROR][EssenceCmd] Unexpected error processing essence data: {e}")
             traceback.print_exc()
-            await self.bot._send_message(ctx, "An unexpected error occurred while fetching essences.")
+            await self.bot.send_message(ctx, "An unexpected error occurred while fetching essences.")

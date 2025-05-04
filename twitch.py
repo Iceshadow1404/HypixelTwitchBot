@@ -103,7 +103,7 @@ class Bot(commands.Bot):
         # Uses the SkyblockClient with caching for API calls.
         # Returns (target_ign, player_uuid, selected_profile_data) or None if an error occurred.
         if not self.hypixel_api_key:
-            # Use direct ctx.send for initial API key check as _send_message might fail early
+            # Use direct ctx.send for initial API key check as send_message might fail early
             await ctx.send("Hypixel API is not configured. Please check the .env file.")
             return None
 
@@ -131,21 +131,21 @@ class Bot(commands.Bot):
         # Use cached client instead of utility functions
         player_uuid = await self.skyblock_client.get_uuid_from_ign(target_ign, ctx.author.name)
         if not player_uuid:
-            # Use _send_message for this potentially delayed error message
-            await self._send_message(ctx,
+            # Use send_message for this potentially delayed error message
+            await self.send_message(ctx,
                                      f"Could not find Minecraft account for '{target_ign}'. Please check the username. You can use #link IGN to link your Twitch account to your Minecraft IGN")
             return None
 
         # Use cached client instead of utility functions
         profiles = await self.skyblock_client.get_skyblock_data(player_uuid, useCache)
         if profiles is None:  # API error occurred
-            # Use _send_message for this potentially delayed error message
-            await self._send_message(ctx,
+            # Use send_message for this potentially delayed error message
+            await self.send_message(ctx,
                                      f"Could not fetch SkyBlock profiles for '{target_ign}'. An API error occurred.")
             return None
         if not profiles:  # API succeeded but returned no profiles
-            # Use _send_message for this potentially delayed error message
-            await self._send_message(ctx, f"'{target_ign}' seems to have no SkyBlock profiles yet.")
+            # Use send_message for this potentially delayed error message
+            await self.send_message(ctx, f"'{target_ign}' seems to have no SkyBlock profiles yet.")
             return None
 
         # Select the profile using the helper function
@@ -154,7 +154,7 @@ class Bot(commands.Bot):
         if not selected_profile:
             # If _select_profile returned None (e.g., no latest found after fallback)
             profile_msg = f"the requested profile '{requested_profile_name}' or" if requested_profile_name else "an active"
-            await self._send_message(ctx,
+            await self.send_message(ctx,
                                      f"Could not find {profile_msg} profile for '{target_ign}'. Player must be a member of at least one profile.")
             return None
 
@@ -182,7 +182,7 @@ class Bot(commands.Bot):
             # --- Fetch and Join Live Hypixel Streamers ONLY IF NOT IN LOCAL MODE ---
             if not self.local_mode:
                 print("[INFO] LIVE MODE: Performing initial scan for live Hypixel SkyBlock streamers...")
-                live_streamer_names = await self._fetch_live_hypixel_streamers()
+                live_streamer_names = await self.fetch_live_hypixel_streamers()
 
                 if live_streamer_names is None:
                     print(
@@ -228,11 +228,11 @@ class Bot(commands.Bot):
 
             if not self.local_mode:
                 print("[INFO] Starting background stream monitor task...")
-                asyncio.create_task(self._monitor_streams())
+                asyncio.create_task(self.monitor_hypixel_streams())
 
             # --- Start Cache Cleanup Task (läuft immer) ---
             print("[INFO] Starting background cache cleanup task...")
-            asyncio.create_task(self._periodic_cache_cleanup())
+            asyncio.create_task(self.periodic_cache_cleanup())
 
         except Exception as e:
             print(f"[ERROR] Error during event_ready: {e}")
@@ -252,7 +252,7 @@ class Bot(commands.Bot):
 
         await self.handle_commands(message)
 
-    async def _send_message(self, ctx: commands.Context, message: str):
+    async def send_message(self, ctx: commands.Context, message: str):
         # Truncate message for logging if it's too long
         log_message = message[:450] + '...' if len(message) > 450 else message
         print(f"[DEBUG][Reply] Attempting to reply in #{ctx.channel.name}: {log_message}")
@@ -280,7 +280,7 @@ class Bot(commands.Bot):
             print(f"[ERROR][Reply] FAILED to send reply to #{ctx.channel.name}: {reply_e}")
             traceback.print_exc()
 
-    async def _periodic_cache_cleanup(self):
+    async def periodic_cache_cleanup(self):
         # Periodically clears old entries from the cache to prevent memory growth.
         print("[INFO][CacheCleanup] Starting periodic cache cleanup task...")
         cleanup_interval = 3600  # Clean up every hour
@@ -322,7 +322,7 @@ class Bot(commands.Bot):
 
     # --- Helper Methods (for Stream Monitoring) ---
 
-    async def _fetch_live_hypixel_streamers(self) -> list[str] | None:
+    async def fetch_live_hypixel_streamers(self) -> list[str] | None:
         """Fetches live Minecraft streams, filters for Hypixel SkyBlock, and returns a list of usernames."""
         client_id = os.getenv("TWITCH_CLIENT_ID")
         client_secret = os.getenv("TWITCH_CLIENT_SECRET")
@@ -331,7 +331,7 @@ class Bot(commands.Bot):
             print("[ERROR][StreamFetch] TWITCH_CLIENT_ID or TWITCH_CLIENT_SECRET not found.")
             return None
 
-        access_token = await self._get_twitch_access_token(client_id, client_secret)
+        access_token = await self.get_twitch_access_token(client_id, client_secret)
         if not access_token:
             print("[ERROR][StreamFetch] Failed to get access token.")
             return None
@@ -365,7 +365,7 @@ class Bot(commands.Bot):
                                 break # No more pages
                         elif response.status == 401: # Unauthorized - Token might have expired
                             print("[WARN][StreamFetch] Received 401 Unauthorized. Attempting to refresh token.")
-                            access_token = await self._get_twitch_access_token(client_id, client_secret) # Try refreshing
+                            access_token = await self.get_twitch_access_token(client_id, client_secret) # Try refreshing
                             if not access_token:
                                 print("[ERROR][StreamFetch] Failed to refresh access token after 401.")
                                 return None # Give up if refresh fails
@@ -384,7 +384,7 @@ class Bot(commands.Bot):
             traceback.print_exc()
             return None # Return None on unexpected errors
 
-    async def _monitor_streams(self):
+    async def monitor_hypixel_streams(self):
         """Continuously monitors for Hypixel SkyBlock streams, joins new ones and leaves irrelevant ones after 15 minutes."""
         print("[INFO][Monitor] Background stream monitor starting...")
 
@@ -393,7 +393,7 @@ class Bot(commands.Bot):
 
         while True:
             try:
-                live_streamer_names = await self._fetch_live_hypixel_streamers()
+                live_streamer_names = await self.fetch_live_hypixel_streamers()
                 current_time = datetime.now()
 
                 if live_streamer_names is None:
@@ -505,7 +505,7 @@ class Bot(commands.Bot):
                 print(f"[ERROR][Monitor] Unexpected error: {e}")
                 await asyncio.sleep(300)  # 5 minute retry delay after errors
 
-    async def _get_twitch_access_token(self, client_id: str, client_secret: str) -> str | None:
+    async def get_twitch_access_token(self, client_id: str, client_secret: str) -> str | None:
         """Get an access token from Twitch using client credentials."""
         url = "https://id.twitch.tv/oauth2/token"
         params = {

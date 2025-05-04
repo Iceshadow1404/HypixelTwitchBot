@@ -48,9 +48,9 @@ class PowderCommand:
                 f"glacite powder: {current_glacite:,.0f} (total: {total_glacite:,.0f})"
             )
 
-            await self.bot._send_message(ctx, output_message)
+            await self.bot.send_message(ctx, output_message)
 
         except Exception as e:
             print(f"[ERROR][PowderCmd] Unexpected error processing powder data: {e}")
             traceback.print_exc()
-            await self.bot._send_message(ctx, "An unexpected error occurred while fetching powder amounts.")
+            await self.bot.send_message(ctx, "An unexpected error occurred while fetching powder amounts.")

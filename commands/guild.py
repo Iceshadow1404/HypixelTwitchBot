@@ -55,7 +55,7 @@ async def process_guild_command(ctx: commands.Context, args: str | None = None):
 
     if not hasattr(bot, '_guild_command') or bot._guild_command is None:
         print("[ProcessGuildCmd][Error] GuildCommand instance not found on bot object (_guild_command).")
-        await bot._send_message(ctx, "An internal error occurred (GC101: Guild module not ready).")
+        await bot.send_message(ctx, "An internal error occurred (GC101: Guild module not ready).")
         return
 
     parsed_args = await _parse_command_args(bot, ctx, args, 'guild')
@@ -76,7 +76,7 @@ async def process_guild_command(ctx: commands.Context, args: str | None = None):
 
     if not bot.skyblock_client:
          print("[ProcessGuildCmd][Error] SkyblockClient not ready when command was executed.")
-         await bot._send_message(ctx, "Error: The Skyblock data client is not ready. Please try again shortly.")
+         await bot.send_message(ctx, "Error: The Skyblock data client is not ready. Please try again shortly.")
          return
 
     player_uuid = await bot.skyblock_client.get_uuid_from_ign(target_ign)
@@ -91,20 +91,20 @@ async def process_guild_command(ctx: commands.Context, args: str | None = None):
         if not args and linked_ign:
             target_ign = linked_ign
         elif not args and not linked_ign:
-             await bot._send_message(ctx, f"Please specify a player IGN (`#guild <player_ign>`) or link your account first using `#link <ign>`.")
+             await bot.send_message(ctx, f"Please specify a player IGN (`#guild <player_ign>`) or link your account first using `#link <ign>`.")
              return
         else:
-            await bot._send_message(ctx, f"Could not find a Minecraft account for '{target_ign}'. Please check the name.")
+            await bot.send_message(ctx, f"Could not find a Minecraft account for '{target_ign}'. Please check the name.")
             return
 
     guild_response = await bot._guild_command._fetch_guild_data_by_uuid(player_uuid)
 
     if guild_response is None:
-        await bot._send_message(ctx, f"Could not fetch guild information for '{target_ign}'. An API or network error occurred.")
+        await bot.send_message(ctx, f"Could not fetch guild information for '{target_ign}'. An API or network error occurred.")
     elif guild_response.get("guild") is None:
-        await bot._send_message(ctx, f"'{target_ign}' is not currently in a Hypixel guild.")
+        await bot.send_message(ctx, f"'{target_ign}' is not currently in a Hypixel guild.")
     else:
         guild_data = guild_response.get("guild")
         guild_name = guild_data.get("name", "Unknown Guild Name")
         message = f"'{target_ign}' is in the guild: {guild_name}"
-        await bot._send_message(ctx, message)
+        await bot.send_message(ctx, message)

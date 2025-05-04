@@ -26,4 +26,4 @@ class HelpCommand:
 
         help_message = " ".join(help_parts)
         
-        await self.bot._send_message(ctx, help_message) 
+        await self.bot.send_message(ctx, help_message)

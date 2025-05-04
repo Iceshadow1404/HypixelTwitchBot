@@ -80,7 +80,7 @@ class RtcaCommand:
 
             if unidentified_parts:
                 usage_message = f"Too many or ambiguous arguments: {unidentified_parts}. Usage: {self.bot._prefix}rtca <username> [profile_name] [target_ca=50] [floor=m7]"
-                await self.bot._send_message(ctx, usage_message)
+                await self.bot.send_message(ctx, usage_message)
                 return
 
         target_level: int
@@ -92,7 +92,7 @@ class RtcaCommand:
             print(f"[DEBUG][RtcaCmd] Validated target_level: {target_level}")
 
         except ValueError as e:
-            await self.bot._send_message(ctx,
+            await self.bot.send_message(ctx,
                                          f"Invalid argument: {e}. Usage: {self.bot._prefix}rtca <username> [profile_name] [target_ca=50] [floor=m7]")
             return
 
@@ -116,7 +116,7 @@ class RtcaCommand:
 
             if player_classes_data is None:
                 print(f"[INFO][RtcaCmd] No player_classes data found for {target_ign} in profile {profile_name}.")
-                await self.bot._send_message(ctx, f"'{target_ign}' has no class data in profile '{profile_name}'.")
+                await self.bot.send_message(ctx, f"'{target_ign}' has no class data in profile '{profile_name}'.")
                 return
 
             current_class_levels = {}
@@ -141,7 +141,7 @@ class RtcaCommand:
                 classes_below_target = [cn for cn, level in current_class_levels.items() if level < target_level]
 
                 if not classes_below_target:
-                    await self.bot._send_message(ctx,
+                    await self.bot.send_message(ctx,
                                                  f"{target_ign} (CA {current_ca:.2f}) has already reached or surpassed the target Class Average {target_level}.")
                     return
                 else:
@@ -169,7 +169,7 @@ class RtcaCommand:
 
             if xp_per_run <= 0:  # Safety check
                 print(f"[ERROR][RtcaCmd] Base XP per run is zero or negative for {selected_floor_name}.")
-                await self.bot._send_message(ctx, "Error with base XP configuration. Cannot estimate runs.")
+                await self.bot.send_message(ctx, "Error with base XP configuration. Cannot estimate runs.")
                 return
 
             xp_required_for_target_level = _get_xp_for_target_level(self.bot.leveling_data, target_level_for_milestone)
@@ -196,7 +196,7 @@ class RtcaCommand:
 
             # Check if simulation is necessary
             if not xp_needed_dict:
-                await self.bot._send_message(ctx,
+                await self.bot.send_message(ctx,
                                              f"{target_ign} already meets the XP requirements for CA {target_level}.")
                 return
 
@@ -274,10 +274,10 @@ class RtcaCommand:
                 print("[WARN][RtcaCmd] Output message with breakdown too long. Sending without breakdown.")
                 output_message = base_message
 
-            await self.bot._send_message(ctx, output_message)
+            await self.bot.send_message(ctx, output_message)
 
         except Exception as e:
             print(f"[ERROR][RtcaCmd] Unexpected error calculating RTCA for {ign}: {e}")
             traceback.print_exc()
-            await self.bot._send_message(ctx,
+            await self.bot.send_message(ctx,
                                          f"An unexpected error occurred while calculating RTCA for '{target_ign}'.")

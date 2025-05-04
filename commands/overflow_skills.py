@@ -80,4 +80,4 @@ async def process_overflow_skill_command(ctx: commands.Context, ign: str | None,
     skills_str = ' | '.join(skill_text)
     output_message = f"{target_ign}'s overflow skill levels (SA {average_skill_level:.2f}) {skills_str}"
     
-    await bot._send_message(ctx, output_message)
+    await bot.send_message(ctx, output_message)

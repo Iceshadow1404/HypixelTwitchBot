@@ -12,7 +12,6 @@ from profiletyping import Profile
 
 class SkyblockClient:
     # Handles interactions with Mojang and Hypixel APIs for SkyBlock data.
-
     def __init__(self, api_key: Optional[str], session: aiohttp.ClientSession):
         self.api_key = api_key
         self.session = session

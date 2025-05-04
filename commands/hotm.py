@@ -33,9 +33,9 @@ class HotmCommand:
 
             # Use the imported calculation function and bot's leveling data
             level = calculate_hotm_level(self.bot.leveling_data, hotm_xp)
-            await self.bot._send_message(ctx, f"{target_ign}'s HotM level is {level:.2f} (XP: {hotm_xp:,.0f}) (Profile: '{profile_name}')")
+            await self.bot.send_message(ctx, f"{target_ign}'s HotM level is {level:.2f} (XP: {hotm_xp:,.0f}) (Profile: '{profile_name}')")
 
         except Exception as e:
             print(f"[ERROR][HotmCmd] Unexpected error processing HotM data: {e}")
             traceback.print_exc()
-            await self.bot._send_message(ctx, "An unexpected error occurred while fetching HotM level.")
+            await self.bot.send_message(ctx, "An unexpected error occurred while fetching HotM level.")

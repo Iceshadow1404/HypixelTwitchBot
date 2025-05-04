@@ -27,7 +27,7 @@ async def process_skills_command(ctx: commands.Context, ign: str | None = None, 
     try:
         member_data = selected_profile.get('members', {}).get(player_uuid)
         if not member_data:
-            await bot._send_message(ctx, f"Could not find member data for '{target_ign}' in profile '{profile_name}'.")
+            await bot.send_message(ctx, f"Could not find member data for '{target_ign}' in profile '{profile_name}'.")
             return
 
         experience_data = member_data.get('player_data', {}).get('experience', {})
@@ -46,10 +46,10 @@ async def process_skills_command(ctx: commands.Context, ign: str | None = None, 
         if skills_counted > 0:
             average_level = total_level / skills_counted
             skills_str = " | ".join(skill_levels)
-            await bot._send_message(ctx, f"{target_ign}'s skill levels (SA {average_level:.2f}) {skills_str}")
+            await bot.send_message(ctx, f"{target_ign}'s skill levels (SA {average_level:.2f}) {skills_str}")
         else:
-            await bot._send_message(ctx, f"Could not calculate skill level for '{target_ign}' in profile '{profile_name}'. Skill data might be missing.")
+            await bot.send_message(ctx, f"Could not calculate skill level for '{target_ign}' in profile '{profile_name}'. Skill data might be missing.")
     except Exception as e:
         print(f"[ERROR][SkillsCmd] Unexpected error calculating skills: {e}")
         traceback.print_exc()
-        await bot._send_message(ctx, "An unexpected error occurred while calculating skill levels.")
+        await bot.send_message(ctx, "An unexpected error occurred while calculating skill levels.")

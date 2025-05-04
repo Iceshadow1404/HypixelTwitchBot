@@ -109,13 +109,13 @@ class CommandsCog(commands.Cog):
     @commands.command(name='dexter')
     async def dexter_command(self, ctx: commands.Context):
         """Hidden command."""
-        await self.bot._send_message(ctx, "YEP skill issue confirmed!")
+        await self.bot.send_message(ctx, "YEP skill issue confirmed!")
     dexter_command.hidden = True
 
     @commands.command(name='dongo')
     async def dongo_command(self, ctx: commands.Context):
         """Hidden command."""
-        await self.bot._send_message(ctx, "🥚")
+        await self.bot.send_message(ctx, "🥚")
     dongo_command.hidden = True
 
     @commands.command(name='help')

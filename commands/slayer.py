@@ -29,7 +29,7 @@ class SlayerCommand:
 
             if not slayer_data:
                 print(f"[INFO][SlayerCmd] No slayer data found for {target_ign} in profile {profile_name}.")
-                await self.bot._send_message(ctx, f"'{target_ign}' has no slayer data in profile '{profile_name}'.")
+                await self.bot.send_message(ctx, f"'{target_ign}' has no slayer data in profile '{profile_name}'.")
                 return
 
             slayer_levels = []
@@ -44,9 +44,9 @@ class SlayerCommand:
                 slayer_levels.append(f"{display_name} {level} ({xp_str} XP)")
 
             output_message = f"{target_ign}'s Slayers (Profile: '{profile_name}'): { ' | '.join(slayer_levels) }"
-            await self.bot._send_message(ctx, output_message)
+            await self.bot.send_message(ctx, output_message)
 
         except Exception as e:
             print(f"[ERROR][SlayerCmd] Unexpected error processing slayer data: {e}")
             traceback.print_exc()
-            await self.bot._send_message(ctx, "An unexpected error occurred while fetching slayer levels.")
+            await self.bot.send_message(ctx, "An unexpected error occurred while fetching slayer levels.")

@@ -36,24 +36,24 @@ class MayorCommand:
                                     minister_str = f" | Minister: {minister_name} ({minister_perk})"
 
                                 output_message = f"Current Mayor: {num_perks} perk {mayor_name} ({perks_str}){minister_str}"
-                                await self.bot._send_message(ctx, output_message)
+                                await self.bot.send_message(ctx, output_message)
                             else:
-                                await self.bot._send_message(ctx, "Could not find current mayor data in the API response.")
+                                await self.bot.send_message(ctx, "Could not find current mayor data in the API response.")
                         else:
-                            await self.bot._send_message(ctx, "API request failed (success=false). Could not fetch election data.")
+                            await self.bot.send_message(ctx, "API request failed (success=false). Could not fetch election data.")
                     else:
-                        await self.bot._send_message(ctx, f"Error fetching election data. API returned status {response.status}.")
+                        await self.bot.send_message(ctx, f"Error fetching election data. API returned status {response.status}.")
 
         except aiohttp.ClientError as e:
             print(f"[ERROR][API] Network error fetching election data: {e}")
-            await self.bot._send_message(ctx, "Network error while fetching election data.")
+            await self.bot.send_message(ctx, "Network error while fetching election data.")
         except json.JSONDecodeError:
              print(f"[ERROR][API] Failed to parse JSON from election API.")
-             await self.bot._send_message(ctx, "Error parsing election data from API.")
+             await self.bot.send_message(ctx, "Error parsing election data from API.")
         except Exception as e:
             print(f"[ERROR][MayorCmd] Unexpected error: {e}")
             traceback.print_exc()
-            await self.bot._send_message(ctx, "An unexpected error occurred while fetching mayor information.")
+            await self.bot.send_message(ctx, "An unexpected error occurred while fetching mayor information.")
 
     async def mayor_command_logic(self):
         """Fetches the current SkyBlock mayor and perks and returns the data."""

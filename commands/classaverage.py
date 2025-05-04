@@ -19,7 +19,7 @@ class ClassAverageCommand:
             if len(parts) > 1:
                 requested_profile_name = parts[1]
             if len(parts) > 2:
-                await self.bot._send_message(ctx, f"Too many arguments. Usage: {self.bot._prefix}classaverage <username> [profile_name]")
+                await self.bot.send_message(ctx, f"Too many arguments. Usage: {self.bot._prefix}classaverage <username> [profile_name]")
                 return
 
         profile_data = await self.bot._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
@@ -52,12 +52,12 @@ class ClassAverageCommand:
             if valid_classes_counted > 0:
                 average_level = total_level / valid_classes_counted
                 levels_str = " | ".join([f"{name} {lvl:.2f}" for name, lvl in class_levels.items()])
-                await self.bot._send_message(ctx, f"{target_ign}'s class levels in profile '{profile_name}': {levels_str} | Average: {average_level:.2f}")
+                await self.bot.send_message(ctx, f"{target_ign}'s class levels in profile '{profile_name}': {levels_str} | Average: {average_level:.2f}")
             else:
                 print(f"[WARN][ClassAvgCmd] No valid classes found to calculate average for {target_ign}.")
-                await self.bot._send_message(ctx, f"Could not calculate class average for '{target_ign}'.")
+                await self.bot.send_message(ctx, f"Could not calculate class average for '{target_ign}'.")
 
         except Exception as e:
             print(f"[ERROR][ClassAvgCmd] Unexpected error processing class levels: {e}")
             traceback.print_exc()
-            await self.bot._send_message(ctx, "An unexpected error occurred while fetching class levels.")
+            await self.bot.send_message(ctx, "An unexpected error occurred while fetching class levels.")

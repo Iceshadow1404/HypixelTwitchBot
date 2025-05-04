@@ -59,7 +59,7 @@ class RunsTillCataCommand:
 
             if unidentified_parts:
                 usage_message = f"Too many or ambiguous arguments: {unidentified_parts}. Usage: {self.bot._prefix}runstillcata <username> [profile_name] [target_level] [floor=m7]"
-                await self.bot._send_message(ctx, usage_message)
+                await self.bot.send_message(ctx, usage_message)
                 return
 
         target_level: int | None = None
@@ -76,7 +76,7 @@ class RunsTillCataCommand:
                 print(f"[DEBUG][RunsTillCataCmd] Validated target_level: {target_level}")
 
         except ValueError as e:
-            await self.bot._send_message(ctx, f"Invalid argument: {e}. Usage: {self.bot._prefix}runstillcata <username> [profile_name] [target_level] [floor=m7]")
+            await self.bot.send_message(ctx, f"Invalid argument: {e}. Usage: {self.bot._prefix}runstillcata <username> [profile_name] [target_level] [floor=m7]")
             return
 
         profile_data = await self.bot._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name)
@@ -103,7 +103,7 @@ class RunsTillCataCommand:
             xp_needed = xp_for_target_level - current_xp
 
             if xp_needed <= 0:
-                await self.bot._send_message(ctx, f"{target_ign} has already reached Catacombs level {target_level_calc}!")
+                await self.bot.send_message(ctx, f"{target_ign} has already reached Catacombs level {target_level_calc}!")
                 return
             if floor_str == 'm6':
                 xp_per_run = BASE_M6_XP # Base M6 Cata XP
@@ -113,7 +113,7 @@ class RunsTillCataCommand:
                 floor_name = "M7"
 
             if xp_per_run <= 0:
-                 await self.bot._send_message(ctx, "Invalid XP per run configured.")
+                 await self.bot.send_message(ctx, "Invalid XP per run configured.")
                  return
 
             runs_needed = math.ceil(xp_needed / xp_per_run)
@@ -122,9 +122,9 @@ class RunsTillCataCommand:
                 f"{target_ign} (Cata {current_level:.2f}) needs {xp_needed:,.0f} XP for level {target_level_calc}. "
                 f"{floor_name}: {runs_needed:,} runs ({xp_per_run:,} XP/run)"
             )
-            await self.bot._send_message(ctx, output_message)
+            await self.bot.send_message(ctx, output_message)
 
         except Exception as e:
             print(f"[ERROR][RunsTillCataCmd] Unexpected error: {e}")
             traceback.print_exc()
-            await self.bot._send_message(ctx, f"An unexpected error occurred while calculating runs needed for '{target_ign}'.")
+            await self.bot.send_message(ctx, f"An unexpected error occurred while calculating runs needed for '{target_ign}'.")

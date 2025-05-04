@@ -64,10 +64,10 @@ class LinkCommand:
                 twitch_username = ctx.author.name.lower()
 
                 if twitch_username in self.links:
-                    await self.bot._send_message(ctx,
+                    await self.bot.send_message(ctx,
                                                  f"@{ctx.author.name} You are currently linked to Minecraft IGN: {self.links[twitch_username]}")
                 else:
-                    await self.bot._send_message(ctx,
+                    await self.bot.send_message(ctx,
                                                  f"@{ctx.author.name} You are not currently linked to any Minecraft IGN. Use #link <minecraft_ign> to set your IGN.")
                 return
 
@@ -76,7 +76,7 @@ class LinkCommand:
 
             # Validate the Minecraft username
             if not await self._validate_minecraft_username(minecraft_ign):
-                await self.bot._send_message(ctx,
+                await self.bot.send_message(ctx,
                                              f"@{ctx.author.name} '{minecraft_ign}' does not appear to be a valid Minecraft username.")
                 return
 
@@ -85,16 +85,16 @@ class LinkCommand:
             self.links[twitch_username] = minecraft_ign
 
             if self._save_links():
-                await self.bot._send_message(ctx,
+                await self.bot.send_message(ctx,
                                              f"@{ctx.author.name} Successfully linked to Minecraft IGN: {minecraft_ign}")
             else:
-                await self.bot._send_message(ctx,
+                await self.bot.send_message(ctx,
                                              f"@{ctx.author.name} Failed to save your link. Please try again later.")
 
         except Exception as e:
             print(f"[ERROR][LinkCmd] Unexpected error in link command: {e}")
             traceback.print_exc()
-            await self.bot._send_message(ctx, f"@{ctx.author.name} An error occurred while processing your request.")
+            await self.bot.send_message(ctx, f"@{ctx.author.name} An error occurred while processing your request.")
 
     async def unlink_command(self, ctx: commands.Context):
         """Removes the link between a Twitch username and Minecraft IGN.
@@ -108,19 +108,19 @@ class LinkCommand:
                 del self.links[twitch_username]
 
                 if self._save_links():
-                    await self.bot._send_message(ctx,
+                    await self.bot.send_message(ctx,
                                                  f"@{ctx.author.name} Successfully unlinked from Minecraft IGN: {previous_ign}")
                 else:
-                    await self.bot._send_message(ctx,
+                    await self.bot.send_message(ctx,
                                                  f"@{ctx.author.name} Failed to remove your link. Please try again later.")
             else:
-                await self.bot._send_message(ctx,
+                await self.bot.send_message(ctx,
                                              f"@{ctx.author.name} You are not currently linked to any Minecraft IGN.")
 
         except Exception as e:
             print(f"[ERROR][LinkCmd] Unexpected error in unlink command: {e}")
             traceback.print_exc()
-            await self.bot._send_message(ctx, f"@{ctx.author.name} An error occurred while processing your request.")
+            await self.bot.send_message(ctx, f"@{ctx.author.name} An error occurred while processing your request.")
 
     def get_linked_ign(self, twitch_username: str) -> Optional[str]:
         """Gets the linked Minecraft IGN for a Twitch username if it exists."""

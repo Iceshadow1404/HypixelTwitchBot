@@ -46,9 +46,9 @@ class BankCommand:
             parts.append(f"(Profile: '{profile_name}')")
 
             output_message = ", ".join(parts)
-            await self.bot._send_message(ctx, output_message)
+            await self.bot.send_message(ctx, output_message)
 
         except Exception as e:
             print(f"[ERROR][BankCmd] Unexpected error processing balance data: {e}")
             traceback.print_exc()
-            await self.bot._send_message(ctx, "An unexpected error occurred while fetching balance information.")
+            await self.bot.send_message(ctx, "An unexpected error occurred while fetching balance information.")

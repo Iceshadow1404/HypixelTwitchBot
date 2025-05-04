@@ -43,9 +43,9 @@ class NucleusCommand:
             nucleus_result = sum_total_placed // 5
             print(f"[DEBUG][NucleusCmd] Sum: {sum_total_placed}, Result (Sum // 5): {nucleus_result}")
 
-            await self.bot._send_message(ctx, f"{target_ign}'s nucleus runs: {nucleus_result} (Profile: '{profile_name}')")
+            await self.bot.send_message(ctx, f"{target_ign}'s nucleus runs: {nucleus_result} (Profile: '{profile_name}')")
 
         except Exception as e:
             print(f"[ERROR][NucleusCmd] Unexpected error processing nucleus data: {e}")
             traceback.print_exc()
-            await self.bot._send_message(ctx, "An unexpected error occurred while fetching Nucleus runs.")
+            await self.bot.send_message(ctx, "An unexpected error occurred while fetching Nucleus runs.")

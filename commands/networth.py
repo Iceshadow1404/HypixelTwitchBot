@@ -41,7 +41,7 @@ class NetworthCommand:
 
             if not profile_id:
                 print(f"[ERROR][Networth] No profile ID found for {target_ign}")
-                await self.bot._send_message(ctx, f"Couldn't calculate networth for {target_ign}: Missing profile ID")
+                await self.bot.send_message(ctx, f"Couldn't calculate networth for {target_ign}: Missing profile ID")
                 return
 
             museum_data = await self._get_museum_data(player_uuid, profile_id)
@@ -100,17 +100,17 @@ class NetworthCommand:
 
                         response += f" | Top: {', '.join(category_texts)}"
 
-                await self.bot._send_message(ctx, response)
+                await self.bot.send_message(ctx, response)
             else:
                 error_msg = networth_info.get('error',
                                               'Unknown error') if networth_info else 'Failed to calculate networth'
-                await self.bot._send_message(ctx,
+                await self.bot.send_message(ctx,
                                              f"Couldn't calculate networth for {target_ign}: {error_msg}")
 
         except Exception as e:
             print(f"[ERROR][Networth] Error processing networth command: {e}")
             traceback.print_exc()
-            await self.bot._send_message(ctx, "An error occurred while calculating networth.")
+            await self.bot.send_message(ctx, "An error occurred while calculating networth.")
 
     async def _get_museum_data(self, player_uuid: str, profile_id: str) -> Optional[Dict[str, Any]]:
         """Fetch museum data for the player from Hypixel API."""
