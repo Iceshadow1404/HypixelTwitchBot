@@ -77,36 +77,6 @@ def _find_latest_profile(profiles: list, player_uuid: str) -> dict | None:
     return None
 
 
-async def _get_uuid_from_ign(username: str) -> str | None:
-    """Gets the Minecraft UUID for a given username using Mojang API."""
-    url = constants.MOJANG_API_URL.format(username=username)
-    print(f"[DEBUG][API] Mojang request for '{username}'...")
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    uuid = data.get('id')
-                    if not uuid:
-                        print(f"[WARN][API] Mojang API: No UUID found for '{username}'.")
-                        # Return None if UUID is not found, even if status is 200
-                        return None
-                    return uuid  # Return UUID if found
-                elif response.status == 204:  # No content -> User not found
-                    print(f"[WARN][API] Mojang API: Username '{username}' not found.")
-                    return None
-                else:
-                    print(f"[ERROR][API] Mojang API error: Status {response.status}")
-                    return None
-    except aiohttp.ClientError as e:
-        print(f"[ERROR][API] Network error during Mojang API request: {e}")
-        return None
-    except Exception as e:
-        print(f"[ERROR][API] Unexpected error during Mojang API request: {e}")
-        traceback.print_exc()
-        return None
-
-
 async def _get_skyblock_data(hypixel_api_key, uuid: str) -> list | None:
     """Gets SkyBlock profile data for a given UUID using Hypixel API."""
     if not hypixel_api_key:

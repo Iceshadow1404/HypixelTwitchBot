@@ -23,8 +23,10 @@ class SkyblockClient:
         else:
             print("[SkyblockClient] Initialisiert mit Hypixel API Key.")
 
-    async def get_uuid_from_ign(self, username: str) -> Optional[str]:
+    async def get_uuid_from_ign(self, username: str, authorName: str) -> Optional[str]:
         # Fetches the Minecraft UUID for a given In-Game Name using Mojang API or cache.
+
+        target_ign = username if username and any(c.isalnum() for c in username) else authorName
 
         # Check cache first
         cached_uuid = self.cache.get_uuid(username)

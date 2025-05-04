@@ -129,7 +129,7 @@ class Bot(commands.Bot):
         target_ign = target_ign.lstrip('@')
 
         # Use cached client instead of utility functions
-        player_uuid = await self.skyblock_client.get_uuid_from_ign(target_ign)
+        player_uuid = await self.skyblock_client.get_uuid_from_ign(target_ign, ctx.author.name)
         if not player_uuid:
             # Use _send_message for this potentially delayed error message
             await self._send_message(ctx,

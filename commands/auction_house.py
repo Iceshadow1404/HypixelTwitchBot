@@ -6,7 +6,7 @@ import aiohttp
 from twitchio.ext import commands
 
 import constants
-from utils import _get_uuid_from_ign
+from skyblock import SkyblockClient
 from calculations import format_price
 
 
@@ -14,13 +14,15 @@ async def process_auctions_command(ctx: commands.Context, ign: str | None = None
 
     bot = ctx.bot
 
-    target_ign = ign if ign else ctx.author.name
-    target_ign = target_ign.lstrip('@')
-
     try:
-        player_uuid = await _get_uuid_from_ign(target_ign)
+        if hasattr(bot, 'skyblock_client'):
+            skyblock_client = bot.skyblock_client
+        else:
+            skyblock_client = SkyblockClient(bot.hypixel_api_key, aiohttp.ClientSession())
+
+        player_uuid = await skyblock_client.get_uuid_from_ign(ign, ctx.author.name)
         if not player_uuid:
-            await ctx.send(f"Could not find Minecraft account for '{target_ign}'.")
+            await ctx.send(f"Could not find Minecraft account for '{ign}'.")
             return
 
         # --- Fetch Auction Data ---
@@ -57,7 +59,7 @@ async def process_auctions_command(ctx: commands.Context, ign: str | None = None
         # --- End Fetch Auction Data ---
 
         if not auctions:
-            await bot._send_message(ctx, f"'{target_ign}' has no active auctions.")
+            await bot._send_message(ctx, f"'{ign}' has no active auctions.")
             return
 
         # Filter auctions that are less than 2 weeks old
@@ -75,6 +77,7 @@ async def process_auctions_command(ctx: commands.Context, ign: str | None = None
                 continue
 
             timestamp_source = None
+            auction_timestamp = None
 
             # Try to get any available timestamp in order of preference
             if 'start' in auction:
@@ -99,14 +102,14 @@ async def process_auctions_command(ctx: commands.Context, ign: str | None = None
                 print(f"[DEBUG][AuctionsCmd] No timestamp found for auction {auction.get('item_name', auction.get('auction_id', 'Unknown'))}")
 
         if not recent_auctions:
-            await bot._send_message(ctx, f"'{target_ign}' has no active auctions less than 2 weeks old.")
+            await bot._send_message(ctx, f"'{ign}' has no active auctions less than 2 weeks old.")
             return
 
         # Count unique items before filtering for character limit
         total_unique_items = len({auction.get('item_name', 'Unknown Item') for auction in recent_auctions})
 
         # Format output respecting character limit
-        message_prefix = f"{target_ign}'s Auctions: "
+        message_prefix = f"{ign}'s Auctions: "
         auction_list_parts = []
         shown_items_count = 0
 
@@ -131,7 +134,7 @@ async def process_auctions_command(ctx: commands.Context, ign: str | None = None
                 break
 
         if not auction_list_parts:
-            await bot._send_message(ctx, f"Could not format any auctions for '{target_ign}' within the character limit.")
+            await bot._send_message(ctx, f"Could not format any auctions for '{ign}' within the character limit.")
             return
 
         # Add suffix if some items were hidden
