@@ -13,9 +13,6 @@ from calculations import format_price
 async def process_auctions_command(ctx: commands.Context, ign: str | None = None):
 
     bot = ctx.bot
-    if not bot.hypixel_api_key:  # API key check needed here as it uses a different endpoint helper
-        await ctx.send("Hypixel API is not configured.")
-        return
 
     target_ign = ign if ign else ctx.author.name
     target_ign = target_ign.lstrip('@')
@@ -77,8 +74,6 @@ async def process_auctions_command(ctx: commands.Context, ign: str | None = None
             if auction.get('claimed', False):
                 continue
 
-            # Check for any available timestamp - could be 'start', 'end', or 'timestamp'
-            auction_timestamp = None
             timestamp_source = None
 
             # Try to get any available timestamp in order of preference

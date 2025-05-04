@@ -73,12 +73,13 @@ class Bot(commands.Bot):
     # Twitch Bot for interacting with Hypixel SkyBlock API and providing commands.
 
     def __init__(self, token: str, prefix: str, nickname: str, initial_channels: list[str],
-                 hypixel_api_key: str | None = None):
+                 hypixel_api_key: str | None = None, local_mode: bool = False):
         # Initializes the Bot.
         self.start_time = datetime.now()
         self.hypixel_api_key = hypixel_api_key
         self.leveling_data = utils._load_leveling_data()
         self.constants = constants
+        self.local_mode = local_mode
 
         # Initialize the SkyblockClient for caching
         self.session = None  # Will be initialized in event_ready
@@ -106,7 +107,7 @@ class Bot(commands.Bot):
 
         # Initialize bot with only channels from .env first
         super().__init__(token=token, prefix=prefix, nick=nickname, initial_channels=initial_channels)
-        print(f"[INFO] Bot initialized, attempting to join initial channels: {initial_channels}")
+        print(f"[INFO] Bot initialized, attempting to join initial channels from .env: {initial_channels}")
 
         # Register Cogs
         self.add_cog(CommandsCog(self))
@@ -216,34 +217,37 @@ class Bot(commands.Bot):
             print(f'Successfully joined initial channels from .env: {initial_connected_channels}')
             print(f'------')
 
-            # --- Fetch and Join Live Hypixel Streamers ---
-            print("[INFO] Performing initial scan for live Hypixel SkyBlock streamers...")
-            live_streamer_names = await self._fetch_live_hypixel_streamers()
+            # --- Fetch and Join Live Hypixel Streamers ONLY IF NOT IN LOCAL MODE ---
+            if not self.local_mode:
+                print("[INFO] LIVE MODE: Performing initial scan for live Hypixel SkyBlock streamers...")
+                live_streamer_names = await self._fetch_live_hypixel_streamers()
 
-            if live_streamer_names is None:
-                print(
-                    "[WARN] Could not fetch live streamers during startup (API/Token issue?). Monitoring will still run.")
-            else:
-                print(f"[INFO] Found {len(live_streamer_names)} potential live Hypixel SkyBlock streamers.")
-                # Determine which channels to join (those not already connected to)
-                # Filter out None before accessing name
-                # Use the potentially updated list of connected channels after the retry
-                currently_connected = {ch.name.lower() for ch in self.connected_channels if
-                                       ch is not None}  # Use lowercase set
-                streamers_to_join = [name for name in live_streamer_names if name.lower() not in currently_connected]
-                # No need for streamers_to_join_lower now as we compare lowercase directly
-
-                if streamers_to_join:
+                if live_streamer_names is None:
                     print(
-                        f"[INFO] Attempting to join {len(streamers_to_join)} newly found live channels: {streamers_to_join}")
-                    try:
-                        await self.join_channels(streamers_to_join)  # Join using original case names from Twitch API
-                        print("[INFO] Join command sent for live channels. Waiting briefly for channel list update...")
-                        await asyncio.sleep(5)  # Give TwitchIO time to process joins and update self.connected_channels
-                    except Exception as join_error:
-                        print(f"[ERROR] Error trying to join channels: {join_error}")
+                        "[WARN] Could not fetch live streamers during startup (API/Token issue?). Monitoring will still run.")
                 else:
-                    print("[INFO] All found live streamers are already in the connected channel list.")
+                    print(f"[INFO] Found {len(live_streamer_names)} potential live Hypixel SkyBlock streamers.")
+                    # Determine which channels to join (those not already connected to)
+                    # Filter out None before accessing name
+                    # Use the potentially updated list of connected channels after the retry
+                    currently_connected = {ch.name.lower() for ch in self.connected_channels if
+                                           ch is not None}  # Use lowercase set
+                    streamers_to_join = [name for name in live_streamer_names if name.lower() not in currently_connected]
+                    # No need for streamers_to_join_lower now as we compare lowercase directly
+
+                    if streamers_to_join:
+                        print(
+                            f"[INFO] Attempting to join {len(streamers_to_join)} newly found live channels: {streamers_to_join}")
+                        try:
+                            await self.join_channels(streamers_to_join)  # Join using original case names from Twitch API
+                            print("[INFO] Join command sent for live channels. Waiting briefly for channel list update...")
+                            await asyncio.sleep(5)  # Give TwitchIO time to process joins and update self.connected_channels
+                        except Exception as join_error:
+                            print(f"[ERROR] Error trying to join channels: {join_error}")
+                    else:
+                        print("[INFO] All found live streamers are already in the connected channel list.")
+            else: # <-- Optional: Log-Nachricht für Local Mode
+                 print("[INFO] LOCAL MODE: Skipping dynamic joining of live streams on startup.")
             # --- End Fetch and Join ---
 
             # --- Final Output ---
@@ -253,16 +257,18 @@ class Bot(commands.Bot):
                 f'[INFO] Final connected channels list ({len(final_connected_channels)} total): {final_connected_channels}')
 
             if final_connected_channels:
-                print(f"[INFO] Bot setup complete. Monitoring active streams.")
+                print(f"[INFO] Bot setup complete.")
+                if not self.local_mode:
+                    print(f"[INFO] Monitoring active streams.")
                 print(f"[INFO] Bot is ready!")
             else:
                 print("[WARN] Bot connected to Twitch but is not in any channels.")
 
-            # --- Start Background Monitoring ---
-            print("[INFO] Starting background stream monitor task...")
-            asyncio.create_task(self._monitor_streams())
+            if not self.local_mode:
+                print("[INFO] Starting background stream monitor task...")
+                asyncio.create_task(self._monitor_streams())
 
-            # --- Start Cache Cleanup Task ---
+            # --- Start Cache Cleanup Task (läuft immer) ---
             print("[INFO] Starting background cache cleanup task...")
             asyncio.create_task(self._periodic_cache_cleanup())
 
