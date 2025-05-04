@@ -1,6 +1,6 @@
 """Module for handling auction house related commands."""
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import aiohttp
 from twitchio.ext import commands
@@ -11,9 +11,7 @@ from calculations import format_price
 
 
 async def process_auctions_command(ctx: commands.Context, ign: str | None = None):
-    """Shows active auctions for a player, limited by character count.
-       This command currently DOES NOT support profile selection.
-    """
+
     bot = ctx.bot
     if not bot.hypixel_api_key:  # API key check needed here as it uses a different endpoint helper
         await ctx.send("Hypixel API is not configured.")
@@ -65,8 +63,52 @@ async def process_auctions_command(ctx: commands.Context, ign: str | None = None
             await bot._send_message(ctx, f"'{target_ign}' has no active auctions.")
             return
 
-        # Count unique items before filtering
-        total_unique_items = len({auction.get('item_name', 'Unknown Item') for auction in auctions})
+        # Filter auctions that are less than 2 weeks old
+        current_time = datetime.now()
+        two_weeks_ago = current_time - timedelta(days=14)
+
+        # For debugging
+        print(f"[DEBUG][AuctionsCmd] Current time: {current_time}, Two weeks ago: {two_weeks_ago}")
+
+        # Filter auctions by their timestamp, whether it's a start, end, or generic timestamp
+        recent_auctions = []
+        for auction in auctions:
+            # Skip already claimed auctions
+            if auction.get('claimed', False):
+                continue
+
+            # Check for any available timestamp - could be 'start', 'end', or 'timestamp'
+            auction_timestamp = None
+            timestamp_source = None
+
+            # Try to get any available timestamp in order of preference
+            if 'start' in auction:
+                auction_timestamp = auction['start']
+                timestamp_source = 'start'
+            # If we found a timestamp, check if it's within the last 2 weeks
+            if auction_timestamp:
+                try:
+                    # Convert timestamp from milliseconds to datetime
+                    timestamp_dt = datetime.fromtimestamp(auction_timestamp / 1000)
+
+                    # Include auction if timestamp is within the last 2 weeks
+                    if timestamp_dt >= two_weeks_ago:
+                        recent_auctions.append(auction)
+                except Exception as e:
+                    print(f"[DEBUG][AuctionsCmd] Error processing timestamp: {e}")
+                    # If there's an error processing the timestamp, include the auction to be safe
+                    recent_auctions.append(auction)
+            else:
+                # If no timestamp is available, include the auction to be safe
+                recent_auctions.append(auction)
+                print(f"[DEBUG][AuctionsCmd] No timestamp found for auction {auction.get('item_name', auction.get('auction_id', 'Unknown'))}")
+
+        if not recent_auctions:
+            await bot._send_message(ctx, f"'{target_ign}' has no active auctions less than 2 weeks old.")
+            return
+
+        # Count unique items before filtering for character limit
+        total_unique_items = len({auction.get('item_name', 'Unknown Item') for auction in recent_auctions})
 
         # Format output respecting character limit
         message_prefix = f"{target_ign}'s Auctions: "
@@ -74,9 +116,7 @@ async def process_auctions_command(ctx: commands.Context, ign: str | None = None
         shown_items_count = 0
 
         current_message = message_prefix
-        for auction in auctions:
-            if auction.get('claimed') == True:
-                continue
+        for auction in recent_auctions:
             item_name = auction.get('item_name', 'Unknown Item').replace("§.", "")  # Basic formatting code removal
             highest_bid = auction.get('highest_bid_amount', 0)
             if highest_bid == 0:
