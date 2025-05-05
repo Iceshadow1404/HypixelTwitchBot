@@ -25,9 +25,9 @@ async def process_sblvl_command(ctx: commands.Context, ign: str | None = None, r
         # Calculate level by dividing XP by 100
         sb_level = sb_xp / 100.0
 
-        await bot._send_message(ctx, f"{target_ign}'s SkyBlock level in profile '{profile_name}' is {sb_level:.2f}.")
+        await bot.send_message(ctx, f"{target_ign}'s SkyBlock level in profile '{profile_name}' is {sb_level:.2f}.")
 
     except Exception as e:
         print(f"[ERROR][SblvlCmd] Unexpected error processing level data: {e}")
         traceback.print_exc()
-        await bot._send_message(ctx, "An unexpected error occurred while fetching SkyBlock level.")
+        await bot.send_message(ctx, "An unexpected error occurred while fetching SkyBlock level.")

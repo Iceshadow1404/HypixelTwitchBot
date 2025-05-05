@@ -25,9 +25,9 @@ async def process_dungeon_command(ctx: commands.Context, ign: str | None = None,
         catacombs_xp = dungeons_data.get('experience', 0)
 
         level = calculate_dungeon_level(bot.leveling_data, catacombs_xp)
-        await bot._send_message(ctx, f"{target_ign}'s Catacombs level in profile '{profile_name}' is {level:.2f} (XP: {catacombs_xp:,.0f})")
+        await bot.send_message(ctx, f"{target_ign}'s Catacombs level in profile '{profile_name}' is {level:.2f} (XP: {catacombs_xp:,.0f})")
 
     except Exception as e:
         print(f"[ERROR][DungeonCmd] Unexpected error processing dungeon data: {e}")
         traceback.print_exc()
-        await bot._send_message(ctx, "An unexpected error occurred while fetching Catacombs level.")
+        await bot.send_message(ctx, "An unexpected error occurred while fetching Catacombs level.")

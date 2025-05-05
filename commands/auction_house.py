@@ -59,7 +59,7 @@ async def process_auctions_command(ctx: commands.Context, ign: str | None = None
         # --- End Fetch Auction Data ---
 
         if not auctions:
-            await bot._send_message(ctx, f"'{ign}' has no active auctions.")
+            await bot.send_message(ctx, f"'{ign}' has no active auctions.")
             return
 
         # Filter auctions that are less than 2 weeks old
@@ -102,7 +102,7 @@ async def process_auctions_command(ctx: commands.Context, ign: str | None = None
                 print(f"[DEBUG][AuctionsCmd] No timestamp found for auction {auction.get('item_name', auction.get('auction_id', 'Unknown'))}")
 
         if not recent_auctions:
-            await bot._send_message(ctx, f"'{ign}' has no active auctions less than 2 weeks old.")
+            await bot.send_message(ctx, f"'{ign}' has no active auctions less than 2 weeks old.")
             return
 
         # Count unique items before filtering for character limit
@@ -134,7 +134,7 @@ async def process_auctions_command(ctx: commands.Context, ign: str | None = None
                 break
 
         if not auction_list_parts:
-            await bot._send_message(ctx, f"Could not format any auctions for '{ign}' within the character limit.")
+            await bot.send_message(ctx, f"Could not format any auctions for '{ign}' within the character limit.")
             return
 
         # Add suffix if some items were hidden
@@ -146,9 +146,9 @@ async def process_auctions_command(ctx: commands.Context, ign: str | None = None
             if len(final_message) + len(suffix) <= constants.MAX_MESSAGE_LENGTH:
                 final_message += suffix
 
-        await bot._send_message(ctx, final_message)
+        await bot.send_message(ctx, final_message)
 
     except Exception as e:
         print(f"[ERROR][AuctionsCmd] Unexpected error processing auctions: {e}")
         traceback.print_exc()
-        await bot._send_message(ctx, "An unexpected error occurred while fetching auctions.")
+        await bot.send_message(ctx, "An unexpected error occurred while fetching auctions.")
