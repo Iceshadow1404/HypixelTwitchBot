@@ -1,11 +1,25 @@
 # commands/whatdoing.py
 import traceback
 import aiohttp
+import json
 from twitchio.ext import commands
+
 
 class WhatdoingCommand:
     def __init__(self, bot):
         self.bot = bot
+        self.area_names = {}
+        self.load_island_mappings()
+
+    def load_island_mappings(self):
+        """Load island name mappings from islands.json file"""
+        try:
+            with open('islands.json', 'r') as file:
+                data = json.load(file)
+                self.area_names = data.get('area_names', {})
+        except Exception as e:
+            print(f"[ERROR][WhatdoingCmd] Failed to load islands.json: {e}")
+            traceback.print_exc()
 
     async def whatdoing_command(self, ctx: commands.Context, *, args: str | None = None):
         """Shows what the player is currently doing on Hypixel (game type only).
@@ -77,10 +91,10 @@ class WhatdoingCommand:
                             game_type = session_data.get("gameType", "Unknown")
                             mode = session_data.get("mode", "Unknown")
 
-                            ## TODO Change mode to readable Island types
+                            # Convert island code to readable name using the mappings
+                            readable_island = self.get_readable_island_name(mode)
 
-                            # Here the gameType is used directly as delivered by the API
-                            status_message = f"{target_ign} is currently playing {game_type}, ({mode})."
+                            status_message = f"{target_ign} is currently playing {game_type}, ({readable_island})."
                             await self.bot.send_message(ctx, status_message)
                         else:
                             await self.bot.send_message(ctx,
@@ -109,3 +123,6 @@ class WhatdoingCommand:
             print(f"[ERROR][WhatdoingCmd] Unexpected error processing status for {target_ign}: {e}")
             traceback.print_exc()
             await self.bot.send_message(ctx, "An unexpected error occurred while retrieving player status.")
+
+    def get_readable_island_name(self, mode_code):
+        return self.area_names.get(mode_code, mode_code)
