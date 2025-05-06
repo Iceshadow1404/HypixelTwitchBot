@@ -29,6 +29,7 @@ from commands_cog import CommandsCog
 from commands.link import LinkCommand
 from commands.networth import NetworthCommand
 from commands.guild import GuildCommand
+from commands.whatdoing import WhatdoingCommand
 
 
 class Bot(commands.Bot):
@@ -63,6 +64,7 @@ class Bot(commands.Bot):
         self._link_command = LinkCommand(self)
         self._networth_command = NetworthCommand(self)
         self._guild_command = GuildCommand(self)
+        self._whatdoing_command = WhatdoingCommand(self)
 
         # Store initial channels from .env to avoid leaving them
         self._initial_env_channels = [ch.lower() for ch in initial_channels]

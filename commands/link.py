@@ -47,7 +47,7 @@ class LinkCommand:
         """Verify that the Minecraft username exists via the bot's cache or Mojang API."""
         try:
             # Use the bot's existing method to validate through UUID lookup
-            player_uuid = await self.bot.skyblock_client.get_uuid_from_ign(username)
+            player_uuid = await self.bot.skyblock_client.get_uuid_from_ign(username, username)
             return player_uuid is not None
         except Exception as e:
             print(f"[ERROR][LinkCmd] Error validating Minecraft username: {e}")

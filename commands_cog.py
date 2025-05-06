@@ -153,3 +153,7 @@ class CommandsCog(commands.Cog):
         """Displays the Hypixel guild the specified player is in."""
         # Call the processing function from guild.py, passing context and args
         await process_guild_command(ctx, args=args)
+
+    @commands.command(name='whatdoing', aliases=['wd', 'status'])
+    async def whatdoing_command(self, ctx: commands.Context, *, args: str | None = None):
+        await self.bot._whatdoing_command.whatdoing_command(ctx, args=args)
