@@ -12,7 +12,7 @@ CANONICAL_CLASS_NAMES = {
 
 _CLASS_DEFINITIONS_WITH_ALIASES = {
     'archer': ['arch', 'a'],
-    'healer': ['heal', 'h'],
+    'healer': ['heal', 'h', 'heiler'],
     'mage': ['m'],
     'tank': ['t'],
     'berserk': ['berserker', 'b', 'bers']
