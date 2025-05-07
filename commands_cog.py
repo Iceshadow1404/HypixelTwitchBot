@@ -157,3 +157,8 @@ class CommandsCog(commands.Cog):
     @commands.command(name='whatdoing', aliases=['wd', 'status'])
     async def whatdoing_command(self, ctx: commands.Context, *, args: str | None = None):
         await self.bot._whatdoing_command.whatdoing_command(ctx, args=args)
+
+    @commands.command(name='rtcal')  # Name des Befehls für Twitch
+    async def rtcal_command(self, ctx: commands.Context, *, args: str | None = None):
+        """Calculates runs for the active class to reach a target level."""
+        await self.bot._rtcal_command.rtcal_command(ctx, args=args)
