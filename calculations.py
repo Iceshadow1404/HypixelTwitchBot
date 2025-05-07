@@ -219,7 +219,7 @@ def calculate_class_level(leveling_data: LevelingData, xp: float) -> float:
         print("[WARN][Calc] Catacombs XP table not loaded for class calculation.")
         return 0.0
 
-    max_class_level = 99
+    max_class_level = 150
     # Use only the first 50 entries from the Catacombs XP table for class levels
     xp_table = leveling_data['catacombs_xp'][:max_class_level]
 
