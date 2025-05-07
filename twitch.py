@@ -30,7 +30,7 @@ from commands.link import LinkCommand
 from commands.networth import NetworthCommand
 from commands.guild import GuildCommand
 from commands.whatdoing import WhatdoingCommand
-from commands.rtcal import RtcalCommand
+from commands.rtcl import RtclCommand
 
 
 class Bot(commands.Bot):
@@ -66,7 +66,7 @@ class Bot(commands.Bot):
         self._networth_command = NetworthCommand(self)
         self._guild_command = GuildCommand(self)
         self._whatdoing_command = WhatdoingCommand(self)
-        self._rtcal_command = RtcalCommand(self)
+        self._rtcl_command = RtclCommand(self)
 
         # Store initial channels from .env to avoid leaving them
         self._initial_env_channels = [ch.lower() for ch in initial_channels]

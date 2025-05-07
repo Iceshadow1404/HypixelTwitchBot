@@ -158,7 +158,7 @@ class CommandsCog(commands.Cog):
     async def whatdoing_command(self, ctx: commands.Context, *, args: str | None = None):
         await self.bot._whatdoing_command.whatdoing_command(ctx, args=args)
 
-    @commands.command(name='rtcal')  # Name des Befehls für Twitch
-    async def rtcal_command(self, ctx: commands.Context, *, args: str | None = None):
+    @commands.command(name='rtcl')  # Name des Befehls für Twitch
+    async def rtcl_command(self, ctx: commands.Context, *, args: str | None = None):
         """Calculates runs for the active class to reach a target level."""
-        await self.bot._rtcal_command.rtcal_command(ctx, args=args)
+        await self.bot._rtcl_command.rtcl_command(ctx, args=args)

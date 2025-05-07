@@ -1,4 +1,4 @@
-# commands/rtcas.py
+# commands/rtcl.py
 import traceback
 import math
 from twitchio.ext import commands
@@ -10,16 +10,16 @@ from commands.mayor import MayorCommand
 
 # TODO Argument parsing for classes
 
-class RtcalCommand:
+class RtclCommand:
     def __init__(self, bot):
         self.bot = bot
 
-    async def rtcal_command(self, ctx: commands.Context, *, args: str | None = None):  # Methodenname ändern
+    async def rtcl_command(self, ctx: commands.Context, *, args: str | None = None):  # Methodenname ändern
         """Calculates runs needed to reach a target Class Level playing only the active class.
-        Syntax: #rtcal <username> [profile_name] [target_level=50] [floor=m7]
-        Example: #rtcal Player1 Apple 55 m6
+        Syntax: #rtcl <username> [profile_name] [target_level=50] [floor=m7]
+        Example: #rtcl Player1 Apple 55 m6
         """
-        print(f"[COMMAND] Rtcal command triggered by {ctx.author.name}: {args}")
+        print(f"[COMMAND] Rtcl command triggered by {ctx.author.name}: {args}")
 
         ign: str | None = None
         requested_profile_name: str | None = None
@@ -32,7 +32,7 @@ class RtcalCommand:
 
         if not args_stripped:
             ign = ctx.author.name
-            print(f"[DEBUG][RtcalCmd] No arguments provided, defaulting IGN to: {ign}")
+            print(f"[DEBUG][RtclCmd] No arguments provided, defaulting IGN to: {ign}")
         else:
             parts = args_stripped.split()
 
@@ -68,7 +68,7 @@ class RtcalCommand:
                 floor_str = potential_floor
 
             if unidentified_parts:
-                usage_message = f"Too many or ambiguous arguments: {unidentified_parts}. Usage: {self.bot._prefix}rtcal <username> [profile_name] [target_level=50] [floor=m7]"
+                usage_message = f"Too many or ambiguous arguments: {unidentified_parts}. Usage: {self.bot._prefix}rtl <username> [profile_name] [target_level=50] [floor=m7]"
                 await self.bot.send_message(ctx, usage_message)
                 return
 
@@ -80,7 +80,7 @@ class RtcalCommand:
             print(f"[DEBUG][RtcalCmd] Validated target_level: {target_level}")
         except ValueError as e:
             await self.bot.send_message(ctx,
-                                        f"Invalid argument: {e}. Usage: {self.bot._prefix}rtcal <username> [profile_name] [target_level=50] [floor=m7]")
+                                        f"Invalid argument: {e}. Usage: {self.bot._prefix}rtcl <username> [profile_name] [target_level=50] [floor=m7]")
             return
 
         profile_data = await self.bot._get_player_profile_data(ctx, ign, requested_profile_name=requested_profile_name,
@@ -90,7 +90,7 @@ class RtcalCommand:
 
         target_ign, player_uuid, selected_profile = profile_data
         profile_name = selected_profile.get('cute_name', 'Unknown')
-        print(f"[INFO][RtcalCmd] Using profile: {profile_name}")
+        print(f"[INFO][RtclCmd] Using profile: {profile_name}")
 
         try:
             member_data = selected_profile.get('members', {}).get(player_uuid, {})
@@ -104,7 +104,7 @@ class RtcalCommand:
                 return
 
             active_class_name_lower = active_class_name.lower()
-            print(f"[DEBUG][RtcalCmd] Active class for {target_ign}: {active_class_name.capitalize()}")
+            print(f"[DEBUG][RtclCmd] Active class for {target_ign}: {active_class_name.capitalize()}")
 
             if player_classes_data is None:
                 await self.bot.send_message(ctx, f"'{target_ign}' has no class data in profile '{profile_name}'.")
@@ -114,7 +114,7 @@ class RtcalCommand:
             current_active_class_level = calculate_class_level(self.bot.leveling_data, active_class_xp)
 
             print(
-                f"[DEBUG][RtcalCmd] {target_ign} - Active Class: {active_class_name.capitalize()} (Lvl {current_active_class_level:.2f}), Target Level: {target_level}")
+                f"[DEBUG][RtclCmd] {target_ign} - Active Class: {active_class_name.capitalize()} (Lvl {current_active_class_level:.2f}), Target Level: {target_level}")
 
             if current_active_class_level >= target_level:
                 await self.bot.send_message(ctx,
@@ -137,13 +137,13 @@ class RtcalCommand:
             if mayor_data and mayor_data.get("name") == "Derpy":
                 xp_per_run *= 1.5
                 is_derpy_active = True
-                print(f"[DEBUG][RtcalCmd] Derpy is active, XP per run multiplied by 1.5")
+                print(f"[DEBUG][RtclCmd] Derpy is active, XP per run multiplied by 1.5")
 
             xp_per_run *= 1.06  # Beispiel für einen allgemeinen Boost
-            print(f"[DEBUG][RtcalCmd] XP/Run ({selected_floor_name}) after boosts: {xp_per_run:,.0f}")
+            print(f"[DEBUG][RtclCmd] XP/Run ({selected_floor_name}) after boosts: {xp_per_run:,.0f}")
 
             if xp_per_run <= 0:
-                print(f"[ERROR][RtcalCmd] XP per run is zero or negative for {selected_floor_name}.")
+                print(f"[ERROR][RtclCmd] XP per run is zero or negative for {selected_floor_name}.")
                 await self.bot.send_message(ctx, "Error with XP per run configuration. Cannot estimate runs.")
                 return
 
@@ -167,7 +167,7 @@ class RtcalCommand:
             await self.bot.send_message(ctx, output_message)
 
         except Exception as e:
-            print(f"[ERROR][RtcalCmd] Unexpected error calculating RTCAL for {ign}: {e}")
+            print(f"[ERROR][RtclCmd] Unexpected error calculating RTCL for {ign}: {e}")
             traceback.print_exc()
             await self.bot.send_message(ctx,
                                         f"An unexpected error occurred while calculating runs for '{target_ign}'.")
