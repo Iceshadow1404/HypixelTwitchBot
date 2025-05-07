@@ -5,6 +5,7 @@ import constants
 from utils import _parse_command_args
 from calculations import calculate_slayer_level, format_price
 
+
 class SlayerCommand:
     def __init__(self, bot):
         self.bot = bot
@@ -32,18 +33,26 @@ class SlayerCommand:
                 await self.bot.send_message(ctx, f"'{target_ign}' has no slayer data in profile '{profile_name}'.")
                 return
 
+            # Calculate total slayer XP across all bosses
+            total_slayer_xp = 0
             slayer_levels = []
+
             for boss_key in self.bot.constants.SLAYER_BOSS_KEYS:
                 boss_data = slayer_data.get(boss_key, {})
                 xp = boss_data.get('xp', 0)
+                total_slayer_xp += xp
                 level = calculate_slayer_level(self.bot.leveling_data, xp, boss_key)
                 # Capitalize boss name for display
                 display_name = boss_key.capitalize()
                 # Format with integer level and formatted XP
-                xp_str = format_price(xp) 
+                xp_str = format_price(xp)
                 slayer_levels.append(f"{display_name} {level} ({xp_str} XP)")
 
-            output_message = f"{target_ign}'s Slayers (Profile: '{profile_name}'): { ' | '.join(slayer_levels) }"
+            # Format the total XP
+            total_xp_formatted = format_price(total_slayer_xp)
+
+            # Create output message with total XP first
+            output_message = f"{target_ign}'s Slayers (Profile: '{profile_name}'): Total XP: {total_xp_formatted} | {' | '.join(slayer_levels)}"
             await self.bot.send_message(ctx, output_message)
 
         except Exception as e:
