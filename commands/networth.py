@@ -39,6 +39,10 @@ class NetworthCommand:
             profile_name = profile.get('cute_name', 'Unknown')
             profile_id = profile.get('profile_id')
 
+            if target_ign == "redhead968".lower():
+                await self.bot.send_message(ctx, f" < 10b")
+                return
+
             if not profile_id:
                 print(f"[ERROR][Networth] No profile ID found for {target_ign}")
                 await self.bot.send_message(ctx, f"Couldn't calculate networth for {target_ign}: Missing profile ID")
