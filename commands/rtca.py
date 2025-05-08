@@ -160,7 +160,6 @@ class RtcaCommand:
             # --- Mayor Check ---
             mayor_command = MayorCommand(self.bot)
             mayor_data = await mayor_command.mayor_command_logic()
-            print(mayor_data, 'MAYOR')
             if mayor_data and mayor_data.get("name") == "Derpy":
                 print(mayor_data.get("name"))
                 xp_per_run *= 1.5  # Apply Derpy's XP boost
