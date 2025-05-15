@@ -24,11 +24,11 @@ class SkyblockClient:
 
     async def get_uuid_from_ign(self, username: str, authorName: str) -> Optional[str]:
         # Fetches the Minecraft UUID for a given In-Game Name using Mojang API or cache.
-
-        target_ign = username if username and any(c.isalnum() for c in username) else authorName
+        print(username, authorName)
+        target_ign = username if username and any(c.isalnum() for c in username) and not None else authorName
 
         # Check cache first
-        cached_uuid = self.cache.get_uuid(username)
+        cached_uuid = self.cache.get_uuid(target_ign)
         if cached_uuid:
             return cached_uuid
 
@@ -36,35 +36,35 @@ class SkyblockClient:
         if not self.session or self.session.closed:
             print("[SkyblockClient][API] Error: aiohttp Session not available for Mojang API request.")
             return None
-        url = MOJANG_API_URL.format(username=username)
-        print(f"[SkyblockClient][API] Mojang Request for '{username}' to: {url}")
+        url = MOJANG_API_URL.format(username=target_ign)
+        print(f"[SkyblockClient][API] Mojang Request for '{target_ign}' to: {url}")
         try:
             async with self.session.get(url) as response:
-                print(f"[SkyblockClient][API] Mojang Response for '{username}': Status {response.status}")
+                print(f"[SkyblockClient][API] Mojang Response for '{target_ign}': Status {response.status}")
                 if response.status == 200:
                     data = await response.json()
                     # print(f"[SkyblockClient][API] Mojang Response JSON: {data}") # Optional: Debugging
                     uuid = data.get('id')
                     if not uuid:
-                        print(f"[SkyblockClient][API] Mojang Response JSON does not contain 'id' for '{username}'.")
+                        print(f"[SkyblockClient][API] Mojang Response JSON does not contain 'id' for '{target_ign}'.")
                     else:
                         # Store in cache
-                        self.cache.set_uuid(username, uuid)
-                        print(f"[SkyblockClient][Cache] UUID for '{username}' stored in cache.")
+                        self.cache.set_uuid(target_ign, uuid)
+                        print(f"[SkyblockClient][Cache] UUID for '{target_ign}' stored in cache.")
                     return uuid
                 elif response.status == 204:
-                    print(f"[SkyblockClient][API] Mojang API: User '{username}' not found (Status 204).")
+                    print(f"[SkyblockClient][API] Mojang API: User '{target_ign}' not found (Status 204).")
                     return None
                 else:
                     error_text = await response.text()
                     print(
-                        f"[SkyblockClient][API] Error during Mojang API request for '{username}': Status {response.status}, Body: {error_text}")
+                        f"[SkyblockClient][API] Error during Mojang API request for '{target_ign}': Status {response.status}, Body: {error_text}")
                     return None
         except aiohttp.ClientError as e:
-            print(f"[SkyblockClient][API][Error] Netzwerkfehler bei Mojang API Anfrage für '{username}': {e}")
+            print(f"[SkyblockClient][API][Error] Netzwerkfehler bei Mojang API Anfrage für '{target_ign}': {e}")
             return None
         except Exception as e:
-            print(f"[SkyblockClient][API][Error] Unerwarteter Fehler bei Mojang API Anfrage für '{username}': {e}")
+            print(f"[SkyblockClient][API][Error] Unerwarteter Fehler bei Mojang API Anfrage für '{target_ign}': {e}")
             traceback.print_exc()
             return None
 
