@@ -25,6 +25,9 @@ async def process_auctions_command(ctx: commands.Context, ign: str | None = None
             await ctx.send(f"Could not find Minecraft account for '{ign}'.")
             return
 
+        if ign is None:
+            ign = ctx.author.name
+
         # --- Fetch Auction Data ---
         url = constants.HYPIXEL_AUCTION_URL
         params = {"key": bot.hypixel_api_key, "player": player_uuid}
