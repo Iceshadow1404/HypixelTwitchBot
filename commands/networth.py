@@ -39,6 +39,10 @@ class NetworthCommand:
             profile_name = profile.get('cute_name', 'Unknown')
             profile_id = profile.get('profile_id')
 
+            apiOff = False
+            if not 'inventory' in profile['members'][player_uuid]:
+                apiOff = True
+
             if target_ign == "redhead968".lower() and ctx.channel.name == "jstjxel".lower():
                 print(ctx.channel.name)
                 await self.bot.send_message(ctx, f" < 10b")
@@ -86,6 +90,8 @@ class NetworthCommand:
                     extra_infos.append(f"Bank: {formatted_bank}")
                 if nonCosmeticNetworth > 0:
                     extra_infos.append(f"Non-Cosmetic: {formatted_nonCosmetic}")
+                if apiOff:
+                    extra_infos.append(f"Inv API disabled")
 
                 if extra_infos:
                     response += f" | {', '.join(extra_infos)}"
