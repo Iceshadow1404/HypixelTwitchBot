@@ -165,7 +165,7 @@ class CommandsCog(commands.Cog):
 
     @commands.command(name='help')
     async def help_command(self, ctx: commands.Context):
-        """Listet alle verfügbaren Befehle auf."""
+        """Lists all avaible commands."""
         command_names = []
         for command in self.bot.commands.values():
             if getattr(command, 'hidden', False):
