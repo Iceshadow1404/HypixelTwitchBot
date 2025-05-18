@@ -21,7 +21,6 @@ from commands.hotm import HotmCommand
 from commands.essence import EssenceCommand
 from commands.powder import PowderCommand
 from commands.slayer import SlayerCommand
-from commands.help import HelpCommand
 from commands.rtca import RtcaCommand
 from commands.currdungeon import CurrDungeonCommand
 from commands.runstillcata import RunsTillCataCommand
@@ -58,7 +57,6 @@ class Bot(commands.Bot):
         self._essence_command = EssenceCommand(self)
         self._powder_command = PowderCommand(self)
         self._slayer_command = SlayerCommand(self)
-        self._help_command = HelpCommand(self)
         self._rtca_command = RtcaCommand(self)
         self._currdungeon_command = CurrDungeonCommand(self)
         self._runstillcata_command = RunsTillCataCommand(self)

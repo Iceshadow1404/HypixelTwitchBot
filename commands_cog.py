@@ -162,3 +162,16 @@ class CommandsCog(commands.Cog):
     async def rtcl_command(self, ctx: commands.Context, *, args: str | None = None):
         """Calculates runs for the active class to reach a target level."""
         await self.bot._rtcl_command.rtcl_command(ctx, args=args)
+
+    @commands.command(name='help')
+    async def help_command(self, ctx: commands.Context):
+        """Listet alle verfügbaren Befehle auf."""
+        command_names = []
+        for command in self.bot.commands.values():
+            if getattr(command, 'hidden', False):
+                continue
+            command_names.append(command.name)
+        command_names.sort()
+        formatted_commands = " | ".join([f"{'#'}{name}" for name in command_names])
+
+        await self.bot.send_message(ctx, formatted_commands)
