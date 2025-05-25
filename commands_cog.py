@@ -163,7 +163,7 @@ class CommandsCog(commands.Cog):
         """Calculates runs for the active class to reach a target level."""
         await self.bot._rtcl_command.rtcl_command(ctx, args=args)
 
-    @commands.command(name='help')
+    @commands.command(name='help', aliases=['info'])
     async def help_command(self, ctx: commands.Context):
         """Lists all avaible commands."""
         command_names = []
@@ -173,5 +173,6 @@ class CommandsCog(commands.Cog):
             command_names.append(command.name)
         command_names.sort()
         formatted_commands = " | ".join([f"{'#'}{name}" for name in command_names])
+        formatted_commands += ' | made by Iceshadow_'
 
         await self.bot.send_message(ctx, formatted_commands)
