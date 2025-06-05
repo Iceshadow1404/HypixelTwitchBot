@@ -37,7 +37,7 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ steps.repo-name.outputs.repo_owner_lowercase }}/fakesoopy:latest
-            ghcr.io/${{ steps.repo-name.outputs.repo_owner_lowercase }}/fakesoopy:${{ github.sha }}
+            ghcr.io/${{ steps.repo-name.outputs.repo_owner_lowercase }}/hypixelskyblock:latest
+            ghcr.io/${{ steps.repo-name.outputs.repo_owner_lowercase }}/hypixelskyblock:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
