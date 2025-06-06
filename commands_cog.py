@@ -52,7 +52,7 @@ class CommandsCog(commands.Cog):
         ign, requested_profile_name = parsed_args
         await process_dungeon_command(ctx, ign, requested_profile_name=requested_profile_name)
 
-    @commands.command(name='sblvl')
+    @commands.command(name='sblvl', aliases=['lvl'])
     async def sblvl_command(self, ctx: commands.Context, *, args: str | None = None):
         """Displays the specified player's SkyBlock level."""
         parsed_args = await _parse_command_args(self.bot, ctx, args, 'sblvl')
