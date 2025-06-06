@@ -148,7 +148,7 @@ class CommandsCog(commands.Cog):
         """Removes the link between your Twitch username and Minecraft IGN."""
         await self.bot._link_command.unlink_command(ctx)
 
-    @commands.command(name='guild', aliases=['g'])
+    @commands.command(name='guild', aliases=['g', 'guildof'])
     async def guild_command(self, ctx: commands.Context, *, args: str | None = None):
         """Displays the Hypixel guild the specified player is in."""
         # Call the processing function from guild.py, passing context and args
