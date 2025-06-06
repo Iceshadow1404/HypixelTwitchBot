@@ -9,6 +9,7 @@ from commands.auction_house import process_auctions_command
 from commands.cata import process_dungeon_command
 from commands.sblvl import process_sblvl_command
 from commands.guild import process_guild_command
+from commands.skill_level import skill_level_command
 
 class CommandsCog(commands.Cog):
     def __init__(self, bot: 'twitch.IceBot'):
@@ -22,6 +23,11 @@ class CommandsCog(commands.Cog):
             return
         ign, requested_profile_name = parsed_args
         await process_skills_command(ctx, ign, requested_profile_name=requested_profile_name)
+
+    @commands.command(name='skilllevel', aliases=['sl'])
+    async def skill_level_command(self, ctx: commands.Context, *, args: str | None = None):
+        """Displays the specified player's level for a specific skill."""
+        await skill_level_command(ctx, args)
 
     @commands.command(name='kuudra')
     async def kuudra_command(self, ctx: commands.Context, *, args: str | None = None):
