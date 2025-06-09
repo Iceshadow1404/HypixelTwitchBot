@@ -558,7 +558,7 @@ class Bot(commands.Bot):
                         print(f"[STATUS][Monitor] Connected: {len(currently_connected)}{pending_channels_info}{blacklist_info}")
 
                 # Wait before next check
-                await asyncio.sleep(10)
+                await asyncio.sleep(120)
 
             except Exception as e:
                 print(f"[ERROR][Monitor] Unexpected error: {e}")
