@@ -48,6 +48,9 @@ class Bot(commands.Bot):
         self.session = None  # Will be initialized in event_ready
         self.skyblock_client = None  # Will be initialized in event_ready
 
+        self.channel_join_attempts = {}
+        self.blacklisted_channels = set()
+
         self._kuudra_command = KuudraCommand(self)
         self._classaverage_command = ClassAverageCommand(self)
         self._mayor_command = MayorCommand(self)
@@ -203,7 +206,7 @@ class Bot(commands.Bot):
                         print(
                             f"[INFO] Attempting to join {len(streamers_to_join)} newly found live channels: {streamers_to_join}")
                         try:
-                            await self.join_channels(streamers_to_join)  # Join using original case names from Twitch API
+                            await self.safe_join_channels(streamers_to_join)
                             print("[INFO] Join command sent for live channels. Waiting briefly for channel list update...")
                             await asyncio.sleep(5)  # Give TwitchIO time to process joins and update self.connected_channels
                         except Exception as join_error:
@@ -386,6 +389,62 @@ class Bot(commands.Bot):
             traceback.print_exc()
             return None # Return None on unexpected errors
 
+    async def safe_join_channels(self, channels: list[str]):
+        """Safely join channels with retry logic, filtering out blacklisted channels."""
+        if not channels:
+            return
+
+        # Filter out blacklisted channels
+        channels_to_join = [ch for ch in channels if ch.lower() not in self.blacklisted_channels]
+
+        if not channels_to_join:
+            if len(channels) > len(channels_to_join):
+                print(f"[INFO] Skipped {len(channels) - len(channels_to_join)} blacklisted channels, {channels}")
+            return
+
+        if len(channels) > len(channels_to_join):
+            blacklisted_count = len(channels) - len(channels_to_join)
+            print(
+                f"[INFO] Filtered out {blacklisted_count} blacklisted channels, attempting to join {len(channels_to_join)} channels")
+
+        try:
+            await self.join_channels(channels_to_join)
+        except Exception as e:
+            print(f"[ERROR] Error in bulk join for channels {channels_to_join}: {e}")
+            # Try individual joins as fallback
+            for channel in channels_to_join:
+                try:
+                    await self.join_channels([channel])
+                    await asyncio.sleep(1)  # Brief delay between individual attempts
+                except Exception as individual_error:
+                    print(f"[ERROR] Failed individual join for {channel}: {individual_error}")
+
+    async def event_channel_join_failure(self, channel: str):
+        """Handle channel join failures with retry logic."""
+        channel_lower = channel.lower()
+
+        # Increment attempt counter
+        if channel_lower not in self.channel_join_attempts:
+            self.channel_join_attempts[channel_lower] = 0
+
+        self.channel_join_attempts[channel_lower] += 1
+        current_attempts = self.channel_join_attempts[channel_lower]
+
+        print(f'[WARN] Failed to join channel "{channel}" (attempt {current_attempts}/5)')
+
+        if current_attempts >= 5:
+            # Add to blacklist after 5 failed attempts
+            self.blacklisted_channels.add(channel_lower)
+            print(
+                f'[ERROR] Channel "{channel}" blacklisted after {current_attempts} failed attempts. Will ignore until bot restart.')
+
+            # Clean up the attempts counter since we're blacklisting
+            del self.channel_join_attempts[channel_lower]
+        else:
+            # Schedule a retry after a brief delay
+            remaining_attempts = 5 - current_attempts
+            print(f'[INFO] Will retry joining "{channel}" later ({remaining_attempts} attempts remaining)')
+
     async def monitor_hypixel_streams(self):
         """Continuously monitors for Hypixel SkyBlock streams, joins new ones and leaves irrelevant ones after 15 minutes."""
         print("[INFO][Monitor] Background stream monitor starting...")
@@ -459,21 +518,14 @@ class Bot(commands.Bot):
                         except Exception as leave_error:
                             print(f"[ERROR][Monitor] Error leaving channels: {leave_error}")
 
-                    # Handle joining new channels
                     if streamers_to_join:
                         print(
                             f"[INFO][Monitor] Joining {len(streamers_to_join)} new live channels: {streamers_to_join}")
                         try:
-                            await self.join_channels(streamers_to_join)
+                            await self.safe_join_channels(streamers_to_join)  # Use safe join method
                             await asyncio.sleep(3)  # Brief delay for channels to connect
                         except Exception as join_error:
-                            print(f"[ERROR][Monitor] Error joining channels in bulk: {join_error}")
-                            # Fallback: individual joins
-                            for channel_name in streamers_to_join:
-                                try:
-                                    await self.join_channels([channel_name])
-                                except Exception:
-                                    pass  # Skip detailed error logging for individual failures
+                            print(f"[ERROR][Monitor] Error joining channels: {join_error}")
 
                     # Periodic status report (only if changes occurred)
                     if channels_to_leave or streamers_to_join or len(channels_pending_leave) > 0:
@@ -498,10 +550,15 @@ class Bot(commands.Bot):
 
                             pending_channels_info = " | Pending: " + " | ".join(grouped_entries)
 
-                        print(f"[STATUS][Monitor] Connected: {len(currently_connected)}{pending_channels_info}")
+                        # Add blacklist info to status
+                        blacklist_info = ""
+                        if self.blacklisted_channels:
+                            blacklist_info = f" | Blacklisted: {len(self.blacklisted_channels), self.blacklisted_channels}"
+
+                        print(f"[STATUS][Monitor] Connected: {len(currently_connected)}{pending_channels_info}{blacklist_info}")
 
                 # Wait before next check
-                await asyncio.sleep(120)
+                await asyncio.sleep(10)
 
             except Exception as e:
                 print(f"[ERROR][Monitor] Unexpected error: {e}")
