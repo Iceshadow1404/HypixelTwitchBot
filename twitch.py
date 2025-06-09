@@ -171,6 +171,7 @@ class Bot(commands.Bot):
         # Called once the bot has successfully connected to Twitch and joined initial channels.
         try:
             print("[INFO] Bot starting up... Initial connection established.")
+            self.write_debug_log("BOT_STARTUP: Bot successfully connected to Twitch")
 
             # Initialize the aiohttp session and SkyblockClient for caching
             self.session = aiohttp.ClientSession()
@@ -183,6 +184,9 @@ class Bot(commands.Bot):
             initial_connected_channels = [ch.name for ch in self.connected_channels if ch is not None]
             print(f'Successfully joined initial channels from .env: {initial_connected_channels}')
             print(f'------')
+
+            if initial_connected_channels:
+                self.write_debug_log(f"INITIAL_CHANNELS: {', '.join([f'#{ch}' for ch in initial_connected_channels])}")
 
             # --- Fetch and Join Live Hypixel Streamers ONLY IF NOT IN LOCAL MODE ---
             if not self.local_mode:
@@ -314,8 +318,9 @@ class Bot(commands.Bot):
 
     # --- Cleanup ---
     async def close(self):
-        # Gracefully shuts down the bot and closes sessions.
+        """Gracefully shuts down the bot and closes sessions."""
         print("[INFO] Shutting down bot...")
+        self.write_debug_log("BOT_SHUTDOWN: Bot is shutting down")
 
         # Close the aiohttp session when shutting down
         if self.session and not self.session.closed:
@@ -389,65 +394,10 @@ class Bot(commands.Bot):
             traceback.print_exc()
             return None # Return None on unexpected errors
 
-    async def safe_join_channels(self, channels: list[str]):
-        """Safely join channels with retry logic, filtering out blacklisted channels."""
-        if not channels:
-            return
-
-        # Filter out blacklisted channels
-        channels_to_join = [ch for ch in channels if ch.lower() not in self.blacklisted_channels]
-
-        if not channels_to_join:
-            if len(channels) > len(channels_to_join):
-                print(f"[INFO] Skipped {len(channels) - len(channels_to_join)} blacklisted channels, {channels}")
-            return
-
-        if len(channels) > len(channels_to_join):
-            blacklisted_count = len(channels) - len(channels_to_join)
-            print(
-                f"[INFO] Filtered out {blacklisted_count} blacklisted channels, attempting to join {len(channels_to_join)} channels")
-
-        try:
-            await self.join_channels(channels_to_join)
-        except Exception as e:
-            print(f"[ERROR] Error in bulk join for channels {channels_to_join}: {e}")
-            # Try individual joins as fallback
-            for channel in channels_to_join:
-                try:
-                    await self.join_channels([channel])
-                    await asyncio.sleep(1)  # Brief delay between individual attempts
-                except Exception as individual_error:
-                    print(f"[ERROR] Failed individual join for {channel}: {individual_error}")
-
-    async def event_channel_join_failure(self, channel: str):
-        """Handle channel join failures with retry logic."""
-        channel_lower = channel.lower()
-
-        # Increment attempt counter
-        if channel_lower not in self.channel_join_attempts:
-            self.channel_join_attempts[channel_lower] = 0
-
-        self.channel_join_attempts[channel_lower] += 1
-        current_attempts = self.channel_join_attempts[channel_lower]
-
-        print(f'[WARN] Failed to join channel "{channel}" (attempt {current_attempts}/5)')
-
-        if current_attempts >= 5:
-            # Add to blacklist after 5 failed attempts
-            self.blacklisted_channels.add(channel_lower)
-            print(
-                f'[ERROR] Channel "{channel}" blacklisted after {current_attempts} failed attempts. Will ignore until bot restart.')
-
-            # Clean up the attempts counter since we're blacklisting
-            del self.channel_join_attempts[channel_lower]
-        else:
-            # Schedule a retry after a brief delay
-            remaining_attempts = 5 - current_attempts
-            print(f'[INFO] Will retry joining "{channel}" later ({remaining_attempts} attempts remaining)')
-
     async def monitor_hypixel_streams(self):
         """Continuously monitors for Hypixel SkyBlock streams, joins new ones and leaves irrelevant ones after 15 minutes."""
         print("[INFO][Monitor] Background stream monitor starting...")
+        self.write_debug_log("MONITOR_STARTED: Background stream monitoring began")
 
         # Dictionary to track channels that might need to be left, with timestamps
         channels_pending_leave = {}  # format: {channel_name: timestamp_when_marked}
@@ -484,10 +434,12 @@ class Bot(commands.Bot):
                             # If not in live list, mark for potential leaving
                             if channel_name not in channels_pending_leave:
                                 channels_pending_leave[channel_name] = current_time
+                                self.write_debug_log(f"MARKED_FOR_LEAVE: #{channel_name} (15min timeout started)")
                         else:
                             # Channel is live again, remove from pending leave list if present
                             if channel_name in channels_pending_leave:
                                 del channels_pending_leave[channel_name]
+                                self.write_debug_log(f"UNMARKED_FOR_LEAVE: #{channel_name} (channel is live again)")
 
                     # Process channels that have been pending leave for 15+ minutes
                     channels_to_leave = []
@@ -513,10 +465,14 @@ class Bot(commands.Bot):
                     if channels_to_leave:
                         print(
                             f"[INFO][Monitor] Leaving {len(channels_to_leave)} channels (15+ min timeout): {channels_to_leave}")
+                        self.write_debug_log(
+                            f"LEAVING_CHANNELS: {', '.join([f'#{ch}' for ch in channels_to_leave])} (15min timeout)")
+
                         try:
                             await self.part_channels(channels_to_leave)
                         except Exception as leave_error:
                             print(f"[ERROR][Monitor] Error leaving channels: {leave_error}")
+                            self.write_debug_log(f"LEAVE_ERROR: {channels_to_leave} - {str(leave_error)}")
 
                     if streamers_to_join:
                         print(
@@ -562,6 +518,7 @@ class Bot(commands.Bot):
 
             except Exception as e:
                 print(f"[ERROR][Monitor] Unexpected error: {e}")
+                self.write_debug_log(f"MONITOR_ERROR: {str(e)}")
                 await asyncio.sleep(300)  # 5 minute retry delay after errors
 
     async def get_twitch_access_token(self, client_id: str, client_secret: str) -> str | None:
@@ -592,5 +549,107 @@ class Bot(commands.Bot):
             print(f"[ERROR] Error getting access token: {e}")
             traceback.print_exc()
             return None
+    # --- Debug Logging Helper ---
+    def write_debug_log(self, message: str):
+        """Schreibt eine Nachricht mit Zeitstempel in die Debug-Log-Datei."""
+        try:
+            timestamp = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+            log_entry = f"[{timestamp}] {message}\n"
+
+            # Stelle sicher, dass das Verzeichnis existiert
+            os.makedirs(os.path.dirname(constants.DEBUG_LOG), exist_ok=True)
+
+            with open(constants.DEBUG_LOG, 'a', encoding='utf-8') as f:
+                f.write(log_entry)
+        except Exception as e:
+            print(f"[ERROR] Failed to write to debug log: {e}")
+
+        # --- Überschriebene Event-Handler für Channel Join/Leave ---
+
+    async def event_channel_joined(self, channel):
+        """Called when the bot successfully joins a channel."""
+        channel_name = channel.name if hasattr(channel, 'name') else str(channel)
+
+        self.write_debug_log(f"JOINED: #{channel_name}")
+
+        # Reset join attempts counter if successful
+        if channel_name.lower() in self.channel_join_attempts:
+            del self.channel_join_attempts[channel_name.lower()]
+
+    async def event_channel_left(self, channel):
+        """Called when the bot leaves a channel."""
+        channel_name = channel.name if hasattr(channel, 'name') else str(channel)
+
+        print(f"[INFO] Left channel: #{channel_name}")
+        self.write_debug_log(f"LEFT: #{channel_name}")
+
+    async def event_channel_join_failure(self, channel: str):
+        """Handle channel join failures with retry logic."""
+        channel_lower = channel.lower()
+
+        print(f"[WARN] Failed to join channel: #{channel}")
+        self.write_debug_log(f"JOIN_FAILED: #{channel}")
+
+        # Increment attempt counter
+        if channel_lower not in self.channel_join_attempts:
+            self.channel_join_attempts[channel_lower] = 0
+
+        self.channel_join_attempts[channel_lower] += 1
+        current_attempts = self.channel_join_attempts[channel_lower]
+
+        print(f'[WARN] Failed to join channel "{channel}" (attempt {current_attempts}/5)')
+
+        if current_attempts >= 5:
+            # Add to blacklist after 5 failed attempts
+            self.blacklisted_channels.add(channel_lower)
+            print(
+                f'[ERROR] Channel "{channel}" blacklisted after {current_attempts} failed attempts. Will ignore until bot restart.')
+            self.write_debug_log(f"BLACKLISTED: #{channel} (after {current_attempts} failed attempts)")
+
+            # Clean up the attempts counter since we're blacklisting
+            del self.channel_join_attempts[channel_lower]
+        else:
+            # Schedule a retry after a brief delay
+            remaining_attempts = 5 - current_attempts
+            print(f'[INFO] Will retry joining "{channel}" later ({remaining_attempts} attempts remaining)')
+
+        # --- Modifizierte safe_join_channels Methode ---
+
+    async def safe_join_channels(self, channels: list[str]):
+        """Safely join channels with retry logic, filtering out blacklisted channels."""
+        if not channels:
+            return
+
+        # Filter out blacklisted channels
+        channels_to_join = [ch for ch in channels if ch.lower() not in self.blacklisted_channels]
+
+        if not channels_to_join:
+            if len(channels) > len(channels_to_join):
+                print(f"[INFO] Skipped {len(channels) - len(channels_to_join)} blacklisted channels, {channels}")
+            return
+
+        if len(channels) > len(channels_to_join):
+            blacklisted_count = len(channels) - len(channels_to_join)
+            print(
+                f"[INFO] Filtered out {blacklisted_count} blacklisted channels, attempting to join {len(channels_to_join)} channels")
+
+        # Log join attempt
+        self.write_debug_log(f"ATTEMPTING_JOIN: {', '.join([f'#{ch}' for ch in channels_to_join])}")
+
+        try:
+            await self.join_channels(channels_to_join)
+        except Exception as e:
+            print(f"[ERROR] Error in bulk join for channels {channels_to_join}: {e}")
+            self.write_debug_log(f"BULK_JOIN_ERROR: {channels_to_join} - {str(e)}")
+
+            # Try individual joins as fallback
+            for channel in channels_to_join:
+                try:
+                    await self.join_channels([channel])
+                    await asyncio.sleep(1)  # Brief delay between individual attempts
+                except Exception as individual_error:
+                    print(f"[ERROR] Failed individual join for {channel}: {individual_error}")
+                    # Individual failures are already logged by event_channel_join_failure
+
 
 IceBot: TypeAlias = Bot

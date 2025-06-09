@@ -7,6 +7,7 @@ HYPIXEL_MUSEUM_URL = "https://api.hypixel.net/v2/skyblock/museum"
 HYPIXEL_GUILD_API_URL = "https://api.hypixel.net/v2/guild"
 
 LINKS_FILE = "/config/user_links.json"
+DEBUG_LOG = "/config/debug_log.txt"
 
 AVERAGE_SKILLS_LIST = [
     'farming', 'mining', 'combat', 'foraging', 'fishing',
