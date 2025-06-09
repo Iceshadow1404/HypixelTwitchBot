@@ -44,7 +44,6 @@ class NetworthCommand:
                 apiOff = True
 
             if target_ign == "redhead968".lower() and ctx.channel.name == "jstjxel".lower():
-                print(ctx.channel.name)
                 await self.bot.send_message(ctx, f" < 10b")
                 return
 

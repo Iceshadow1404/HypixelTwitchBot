@@ -98,9 +98,6 @@ app.post('/calculate-networth', async (req, res) => {
       }
     }
 
-    console.log('Final response object:');
-    console.log(JSON.stringify(response, null, 2));
-
     res.json(response);
 
   } catch (error) {
@@ -114,5 +111,4 @@ app.post('/calculate-networth', async (req, res) => {
 
 app.listen(port, () => {
   console.log(`Networth service listening at http://localhost:${port}`);
-  console.log(`Make sure skyhelper-networth is installed: npm install skyhelper-networth`);
 });
