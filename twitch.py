@@ -294,6 +294,7 @@ class Bot(commands.Bot):
             if channel:
                 print(f"[DEBUG][Reply] Re-fetched channel object for {channel_name}. Sending reply via channel object.")
                 await channel.send(reply_message)
+                self.write_debug_log(channel_name + " " + reply_message)
                 print(f"[DEBUG][Reply] Successfully sent reply via channel object to #{channel_name}.")
             else:
                 # Fallback if channel couldn't be re-fetched (should not happen if connected)
@@ -579,6 +580,7 @@ class Bot(commands.Bot):
 
             with open(constants.DEBUG_LOG, 'a', encoding='utf-8') as f:
                 f.write(log_entry)
+                print("saved", log_entry, "to", constants.DEBUG_LOG, end="")
         except Exception as e:
             print(f"[ERROR] Failed to write to debug log: {e}")
 
