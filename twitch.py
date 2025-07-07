@@ -81,7 +81,7 @@ class Bot(commands.Bot):
 
     # --- Helper Methods ---
     async def event_command_error(self, ctx: commands.Context, error: Exception):
-        # Handle command errors with additional channel context information.
+        # Handle command errors with additional channel context information
         if isinstance(error, commands.CommandNotFound):
             # Extract the command name from the error message
             match = re.search(r'No command "([^"]+)" was found', str(error))
