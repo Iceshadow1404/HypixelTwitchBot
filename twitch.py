@@ -3,7 +3,7 @@ import asyncio
 import traceback
 from datetime import datetime
 import re
-from typing import TypeAlias, Callable, Any
+from typing import TypeAlias
 import os
 import aiohttp
 from twitchio.ext import commands
@@ -31,25 +31,6 @@ from commands.guild import GuildCommand
 from commands.whatdoing import WhatdoingCommand
 from commands.rtcl import RtclCommand
 
-def retry_on_network_error(retries: int = 3, delay: int = 5):
-    def decorator(func: Callable):
-        async def wrapper(*args, **kwargs) -> Any | None:
-            last_exception = None
-            for attempt in range(retries):
-                try:
-                    return await func(*args, **kwargs)
-                except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-                    last_exception = e
-                    print(f"[WARN][Retry] Network error in '{func.__name__}' (Attempt {attempt + 1}/{retries}): {e}")
-                    await asyncio.sleep(delay * (attempt + 1))
-            print(f"[ERROR][Retry] Function '{func.__name__}' failed permanently after {retries} attempts.")
-            if last_exception:
-                traceback.print_exception(type(last_exception), last_exception, last_exception.__traceback__)
-            return None
-
-        return wrapper
-
-    return decorator
 
 class Bot(commands.Bot):
     # Twitch Bot for interacting with Hypixel SkyBlock API and providing commands.
@@ -350,7 +331,7 @@ class Bot(commands.Bot):
         print("[INFO] Bot connection closed.")
 
     # --- Helper Methods (for Stream Monitoring) ---
-    @retry_on_network_error(retries=3, delay=5)
+
     async def fetch_live_hypixel_streamers(self) -> list[str] | None:
         """Fetches live Minecraft streams, filters for Hypixel SkyBlock, and returns a list of usernames."""
         client_id = os.getenv("TWITCH_CLIENT_ID")
@@ -413,7 +394,6 @@ class Bot(commands.Bot):
             traceback.print_exc()
             return None # Return None on unexpected errors
 
-    @retry_on_network_error(retries=3, delay=5)
     async def monitor_hypixel_streams(self):
         """Continuously monitors for Hypixel SkyBlock streams, joins new ones and leaves irrelevant ones after 15 minutes."""
         print("[INFO][Monitor] Background stream monitor starting...")
@@ -541,7 +521,6 @@ class Bot(commands.Bot):
                 self.write_debug_log(f"MONITOR_ERROR: {str(e)}")
                 await asyncio.sleep(300)  # 5 minute retry delay after errors
 
-    @retry_on_network_error(retries=3, delay=5)
     async def get_twitch_access_token(self, client_id: str, client_secret: str) -> str | None:
         """Get an access token from Twitch using client credentials."""
         url = "https://id.twitch.tv/oauth2/token"
@@ -570,8 +549,9 @@ class Bot(commands.Bot):
             print(f"[ERROR] Error getting access token: {e}")
             traceback.print_exc()
             return None
-
+    # --- Debug Logging Helper ---
     def write_debug_log(self, message: str):
+        """Schreibt eine Nachricht mit Zeitstempel in die Debug-Log-Datei."""
         try:
             timestamp = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
             log_entry = f"[{timestamp}] {message}\n"
@@ -584,6 +564,7 @@ class Bot(commands.Bot):
         except Exception as e:
             print(f"[ERROR] Failed to write to debug log: {e}")
 
+        # --- Überschriebene Event-Handler für Channel Join/Leave ---
 
     async def event_channel_joined(self, channel):
         """Called when the bot successfully joins a channel."""
