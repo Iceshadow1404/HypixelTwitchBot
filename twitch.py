@@ -580,7 +580,6 @@ class Bot(commands.Bot):
 
             with open(constants.DEBUG_LOG, 'a', encoding='utf-8') as f:
                 f.write(log_entry)
-                print("saved", log_entry, "to", constants.DEBUG_LOG, end="")
         except Exception as e:
             print(f"[ERROR] Failed to write to debug log: {e}")
 
