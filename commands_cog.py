@@ -10,6 +10,7 @@ from commands.cata import process_dungeon_command
 from commands.sblvl import process_sblvl_command
 from commands.guild import process_guild_command
 from commands.skill_level import skill_level_command
+from commands.secrets import secrets_command
 
 class CommandsCog(commands.Cog):
     def __init__(self, bot: 'twitch.IceBot'):
@@ -182,3 +183,8 @@ class CommandsCog(commands.Cog):
         formatted_commands += ' | made by Iceshadow_'
 
         await self.bot.send_message(ctx, formatted_commands)
+
+    @commands.command(name='secrets')
+    async def secrets_command(self, ctx: commands.Context, *, args: str | None = None):
+        """Displays the specified player's secret amount"""
+        await secrets_command(ctx, args)
