@@ -176,7 +176,7 @@ class CommandsCog(commands.Cog):
         await secrets_command(ctx, args)
 
     @commands.command(name='status')
-    async def rtca_command(self, ctx: commands.Context, *, args: str | None = None):
+    async def status_command(self, ctx: commands.Context, *, args: str | None = None):
         """Calculates runs/time until a target Catacombs level average."""
         await self.bot._hypxiel_command.status_command(ctx, args=args)
 
