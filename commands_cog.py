@@ -170,6 +170,16 @@ class CommandsCog(commands.Cog):
         """Calculates runs for the active class to reach a target level."""
         await self.bot._rtcl_command.rtcl_command(ctx, args=args)
 
+    @commands.command(name='secrets')
+    async def secrets_command(self, ctx: commands.Context, *, args: str | None = None):
+        """Displays the specified player's secret amount"""
+        await secrets_command(ctx, args)
+
+    @commands.command(name='status')
+    async def rtca_command(self, ctx: commands.Context, *, args: str | None = None):
+        """Calculates runs/time until a target Catacombs level average."""
+        await self.bot._hypxiel_command.status_command(ctx, args=args)
+
     @commands.command(name='help', aliases=['info'])
     async def help_command(self, ctx: commands.Context):
         """Lists all avaible commands."""
@@ -183,13 +193,3 @@ class CommandsCog(commands.Cog):
         formatted_commands += ' | made by Iceshadow_'
 
         await self.bot.send_message(ctx, formatted_commands)
-
-    @commands.command(name='secrets')
-    async def secrets_command(self, ctx: commands.Context, *, args: str | None = None):
-        """Displays the specified player's secret amount"""
-        await secrets_command(ctx, args)
-
-    @commands.command(name='status')
-    async def rtca_command(self, ctx: commands.Context, *, args: str | None = None):
-        """Calculates runs/time until a target Catacombs level average."""
-        await self.bot._hypxiel_command.status_command(ctx, args=args)
