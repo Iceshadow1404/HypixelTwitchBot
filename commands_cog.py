@@ -161,7 +161,7 @@ class CommandsCog(commands.Cog):
         # Call the processing function from guild.py, passing context and args
         await process_guild_command(ctx, args=args)
 
-    @commands.command(name='whatdoing', aliases=['wd', 'status'])
+    @commands.command(name='whatdoing', aliases=['wd'])
     async def whatdoing_command(self, ctx: commands.Context, *, args: str | None = None):
         await self.bot._whatdoing_command.whatdoing_command(ctx, args=args)
 
@@ -188,3 +188,8 @@ class CommandsCog(commands.Cog):
     async def secrets_command(self, ctx: commands.Context, *, args: str | None = None):
         """Displays the specified player's secret amount"""
         await secrets_command(ctx, args)
+
+    @commands.command(name='status')
+    async def rtca_command(self, ctx: commands.Context, *, args: str | None = None):
+        """Calculates runs/time until a target Catacombs level average."""
+        await self.bot._hypxiel_command.status_command(ctx, args=args)
