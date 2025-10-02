@@ -11,6 +11,7 @@ from commands.sblvl import process_sblvl_command
 from commands.guild import process_guild_command
 from commands.skill_level import skill_level_command
 from commands.secrets import secrets_command
+from commands.coinflip import coinflip
 
 class CommandsCog(commands.Cog):
     def __init__(self, bot: 'twitch.IceBot'):
@@ -179,6 +180,11 @@ class CommandsCog(commands.Cog):
     async def status_command(self, ctx: commands.Context, *, args: str | None = None):
         """Calculates runs/time until a target Catacombs level average."""
         await self.bot._hypxiel_command.status_command(ctx, args=args)
+
+    @commands.command(name='coinflip')
+    async def coinflip_command(self, ctx: commands.Context, *, args: str | None = None):
+        """Flips a coin."""
+        await self.bot._coinflip_command.coinflip_command(ctx, args=args)
 
     @commands.command(name='help', aliases=['info'])
     async def help_command(self, ctx: commands.Context):

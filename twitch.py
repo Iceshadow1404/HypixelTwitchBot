@@ -31,6 +31,7 @@ from commands.guild import GuildCommand
 from commands.whatdoing import WhatdoingCommand
 from commands.rtcl import RtclCommand
 from commands.hypixelstatus import hypixelStatus
+from commands.coinflip import coinflip
 
 def retry_on_network_error(retries: int = 3, delay: int = 5):
     def decorator(func: Callable):
@@ -87,6 +88,7 @@ class Bot(commands.Bot):
         self._whatdoing_command = WhatdoingCommand(self)
         self._rtcl_command = RtclCommand(self)
         self._hypxiel_command = hypixelStatus(self)
+        self._coinflip_command = coinflip(self)
 
         # Store initial channels from .env to avoid leaving them
         self._initial_env_channels = [ch.lower() for ch in initial_channels]
@@ -185,6 +187,10 @@ class Bot(commands.Bot):
         return target_ign, player_uuid, selected_profile
 
     # --- Bot Events ---
+
+    async def event_error(self, error: Exception, data: str = None):
+        print(f"[ERROR][event_error] An unhandled error occurred: {error}")
+        traceback.print_exc()
 
     async def event_ready(self):
         # Called once the bot has successfully connected to Twitch and joined initial channels.
@@ -634,7 +640,6 @@ class Bot(commands.Bot):
             remaining_attempts = 5 - current_attempts
             print(f'[INFO] Will retry joining "{channel}" later ({remaining_attempts} attempts remaining)')
 
-        # --- Modifizierte safe_join_channels Methode ---
 
     async def safe_join_channels(self, channels: list[str]):
         """Safely join channels with retry logic, filtering out blacklisted channels."""
