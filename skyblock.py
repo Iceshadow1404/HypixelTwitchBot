@@ -6,7 +6,7 @@ from typing import Optional, Dict, List, Any
 import time
 
 import utils
-from constants import CACHE_TTL, MOJANG_API_URL, HYPIXEL_API_URL, AVERAGE_SKILLS_LIST
+from constants import CACHE_TTL, MOJANG_API_URL, MOJANG_API_URL_FALLBACK, HYPIXEL_API_URL, AVERAGE_SKILLS_LIST
 from cache import SkyblockCache
 from profiletyping import Profile
 
@@ -36,37 +36,50 @@ class SkyblockClient:
         if not self.session or self.session.closed:
             print("[SkyblockClient][API] Error: aiohttp Session not available for Mojang API request.")
             return None
-        url = MOJANG_API_URL.format(username=target_ign)
-        print(f"[SkyblockClient][API] Mojang Request for '{target_ign}' to: {url}")
-        try:
-            async with self.session.get(url) as response:
-                print(f"[SkyblockClient][API] Mojang Response for '{target_ign}': Status {response.status}")
-                if response.status == 200:
-                    data = await response.json()
-                    # print(f"[SkyblockClient][API] Mojang Response JSON: {data}") # Optional: Debugging
-                    uuid = data.get('id')
-                    if not uuid:
-                        print(f"[SkyblockClient][API] Mojang Response JSON does not contain 'id' for '{target_ign}'.")
+
+        urls = [
+            MOJANG_API_URL.format(username=target_ign),
+            MOJANG_API_URL_FALLBACK.format(username=target_ign)
+        ]
+
+        for i, url in enumerate(urls):
+            is_fallback = i > 0
+            api_name = "Mojang Fallback" if is_fallback else "Mojang Primary"
+            print(f"[SkyblockClient][API] {api_name} Request for '{target_ign}' to: {url}")
+            try:
+                async with self.session.get(url) as response:
+                    print(f"[SkyblockClient][API] {api_name} Response for '{target_ign}': Status {response.status}")
+                    if response.status == 200:
+                        data = await response.json()
+                        uuid = data.get('id')
+                        if not uuid:
+                            print(f"[SkyblockClient][API] {api_name} Response JSON does not contain 'id' for '{target_ign}'.")
+                        else:
+                            # Store in cache
+                            self.cache.set_uuid(target_ign, uuid)
+                            print(f"[SkyblockClient][Cache] UUID for '{target_ign}' stored in cache.")
+                            return uuid
+                    elif response.status == 204:
+                        print(f"[SkyblockClient][API] {api_name} API: User '{target_ign}' not found (Status 204).")
+                        return None # If 204, user definitely doesn't exist, no need for fallback
                     else:
-                        # Store in cache
-                        self.cache.set_uuid(target_ign, uuid)
-                        print(f"[SkyblockClient][Cache] UUID for '{target_ign}' stored in cache.")
-                    return uuid
-                elif response.status == 204:
-                    print(f"[SkyblockClient][API] Mojang API: User '{target_ign}' not found (Status 204).")
-                    return None
-                else:
-                    error_text = await response.text()
-                    print(
-                        f"[SkyblockClient][API] Error during Mojang API request for '{target_ign}': Status {response.status}, Body: {error_text}")
-                    return None
-        except aiohttp.ClientError as e:
-            print(f"[SkyblockClient][API][Error] Netzwerkfehler bei Mojang API Anfrage für '{target_ign}': {e}")
-            return None
-        except Exception as e:
-            print(f"[SkyblockClient][API][Error] Unerwarteter Fehler bei Mojang API Anfrage für '{target_ign}': {e}")
-            traceback.print_exc()
-            return None
+                        error_text = await response.text()
+                        print(f"[SkyblockClient][API] Error during {api_name} API request for '{target_ign}': Status {response.status}")
+                        if not is_fallback:
+                            continue # Try next URL
+                        return None
+            except aiohttp.ClientError as e:
+                print(f"[SkyblockClient][API][Error] Netzwerkfehler bei {api_name} Anfrage für '{target_ign}': {e}")
+                if not is_fallback:
+                    continue # Try next URL
+                return None
+            except Exception as e:
+                print(f"[SkyblockClient][API][Error] Unerwarteter Fehler bei {api_name} Anfrage für '{target_ign}': {e}")
+                traceback.print_exc()
+                if not is_fallback:
+                    continue # Try next URL
+                return None
+        return None
 
     async def get_skyblock_data(self, uuid: str, useCache=True) -> Optional[List[Dict[str, Any]]]:
         # Fetches SkyBlock profile data for a given UUID using Hypixel API or cache.
