@@ -32,6 +32,7 @@ from commands.whatdoing import WhatdoingCommand
 from commands.rtcl import RtclCommand
 from commands.hypixelstatus import hypixelStatus
 from commands.coinflip import coinflip
+from commands.roll import roll
 
 def retry_on_network_error(retries: int = 3, delay: int = 5):
     def decorator(func: Callable):
@@ -89,6 +90,7 @@ class Bot(commands.Bot):
         self._rtcl_command = RtclCommand(self)
         self._hypxiel_command = hypixelStatus(self)
         self._coinflip_command = coinflip(self)
+        self._roll_command = roll(self)
 
         # Store initial channels from .env to avoid leaving them
         self._initial_env_channels = [ch.lower() for ch in initial_channels]

@@ -186,6 +186,11 @@ class CommandsCog(commands.Cog):
         """Flips a coin."""
         await self.bot._coinflip_command.coinflip_command(ctx, args=args)
 
+    @commands.command(name='roll')
+    async def roll_command(self, ctx: commands.Context, *, args: str | None = None):
+        """Rolls a number between 1 and 1000."""
+        await self.bot._roll_command.roll_command(ctx, args=args)
+
     @commands.command(name='help', aliases=['info'])
     async def help_command(self, ctx: commands.Context):
         """Lists all avaible commands."""
