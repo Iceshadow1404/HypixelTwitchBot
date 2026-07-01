@@ -1,4 +1,6 @@
 # --- Constants ---
+import os
+
 MOJANG_API_URL = "https://mowojang.matdoes.dev/{username}"
 MOJANG_API_URL_FALLBACK = "https://api.mojang.com/users/profiles/minecraft/{username}"
 HYPIXEL_API_URL = "https://api.hypixel.net/v2/skyblock/profiles"
@@ -7,8 +9,12 @@ HYPIXEL_ELECTION_URL = "https://api.hypixel.net/v2/resources/skyblock/election"
 HYPIXEL_MUSEUM_URL = "https://api.hypixel.net/v2/skyblock/museum"
 HYPIXEL_GUILD_API_URL = "https://api.hypixel.net/v2/guild"
 
-LINKS_FILE = "/config/user_links.json"
-DEBUG_LOG = "/config/debug_log.txt"
+# Config directory. Defaults to a local "config/" folder for development; the
+# Docker image sets CONFIG_DIR=/config so production uses the mounted volume
+# (identical to the previous hard-coded absolute paths).
+CONFIG_DIR = os.getenv("CONFIG_DIR", "config")
+LINKS_FILE = os.path.join(CONFIG_DIR, "user_links.json")
+DEBUG_LOG = os.path.join(CONFIG_DIR, "debug_log.txt")
 
 AVERAGE_SKILLS_LIST = [
     'farming', 'mining', 'combat', 'foraging', 'fishing',
