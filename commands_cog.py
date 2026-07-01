@@ -1,5 +1,6 @@
+from typing import TYPE_CHECKING
+
 from twitchio.ext import commands
-import twitch
 from utils import _parse_command_args
 
 # Import necessary processing functions
@@ -13,8 +14,12 @@ from commands.skill_level import skill_level_command
 from commands.secrets import secrets_command
 from commands.coinflip import coinflip
 
+if TYPE_CHECKING:
+    from twitch import Bot
+
+
 class CommandsCog(commands.Cog):
-    def __init__(self, bot: 'twitch.IceBot'):
+    def __init__(self, bot: "Bot"):
         self.bot = bot
 
     @commands.command(name='skills', aliases=['sa'])
