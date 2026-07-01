@@ -13,7 +13,7 @@ import os
 
 def test_config_dir_defaults_to_relative(monkeypatch):
     monkeypatch.delenv("CONFIG_DIR", raising=False)
-    import constants
+    from hypixelbot import constants
     importlib.reload(constants)
     try:
         assert constants.LINKS_FILE == os.path.join("config", "user_links.json")
@@ -24,7 +24,7 @@ def test_config_dir_defaults_to_relative(monkeypatch):
 
 def test_config_dir_env_reproduces_docker_paths(monkeypatch):
     monkeypatch.setenv("CONFIG_DIR", "/config")
-    import constants
+    from hypixelbot import constants
     importlib.reload(constants)
     try:
         # Byte-identical to the previous hard-coded production paths.

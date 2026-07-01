@@ -32,10 +32,10 @@ def _fire(bot, command_name, args):
 
 # (command, module-qualified impl to stub) for the "parse happens in dispatch" group.
 PARSE_COMMANDS = [
-    ("skills", "commands.skills.process_skills_command"),
-    ("oskill", "commands.overflow_skills.process_overflow_skill_command"),
-    ("dungeon", "commands.cata.process_dungeon_command"),
-    ("sblvl", "commands.sblvl.process_sblvl_command"),
+    ("skills", "hypixelbot.commands.skills.process_skills_command"),
+    ("oskill", "hypixelbot.commands.overflow_skills.process_overflow_skill_command"),
+    ("dungeon", "hypixelbot.commands.cata.process_dungeon_command"),
+    ("sblvl", "hypixelbot.commands.sblvl.process_sblvl_command"),
 ]
 
 
@@ -65,10 +65,10 @@ def test_parse_command_too_many_args_preserves_quirk(bot, monkeypatch, command, 
 
 # Forward-only group: dispatch just hands the raw arg string to the impl.
 FORWARD_COMMANDS = [
-    ("auctions", "commands.auction_house.process_auctions_command"),
-    ("guild", "commands.guild.process_guild_command"),
-    ("secrets", "commands.secrets.secrets_command"),
-    ("skilllevel", "commands.skill_level.skill_level_command"),
+    ("auctions", "hypixelbot.commands.auction_house.process_auctions_command"),
+    ("guild", "hypixelbot.commands.guild.process_guild_command"),
+    ("secrets", "hypixelbot.commands.secrets.secrets_command"),
+    ("skilllevel", "hypixelbot.commands.skill_level.skill_level_command"),
 ]
 
 

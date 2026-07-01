@@ -7,7 +7,7 @@ bodies that were moved into the mixins. These tests assert:
 - the messaging pipeline's write_debug_log actually writes (the one moved
   method with side effects that no other test exercises).
 """
-import constants
+from hypixelbot import constants
 from conftest import FakeCtx, run
 
 # Methods that were moved out of twitch.py into the mixins. If any mixin is
@@ -33,10 +33,10 @@ def test_bot_exposes_all_moved_methods(bot):
 
 
 def test_bot_mro_includes_all_mixins(bot):
-    from bot_messaging import MessagingMixin
-    from bot_profile import ProfileMixin
-    from bot_streams import StreamMonitorMixin
-    from bot_events import EventsMixin
+    from hypixelbot.bot_messaging import MessagingMixin
+    from hypixelbot.bot_profile import ProfileMixin
+    from hypixelbot.bot_streams import StreamMonitorMixin
+    from hypixelbot.bot_events import EventsMixin
 
     mro = type(bot).__mro__
     for mixin in (EventsMixin, StreamMonitorMixin, ProfileMixin, MessagingMixin):

@@ -11,9 +11,7 @@ import types
 import pytest
 
 from conftest import FakeCtx, run
-import utils
-
-
+from hypixelbot import utils
 # --- send_message: reply-format pipeline -----------------------------------
 
 def test_send_message_prefixes_user_mention(bot):

@@ -1,4 +1,4 @@
 #!/bin/bash
 
 node networth.js &
-python -u main.py
+python -u -m hypixelbot.main

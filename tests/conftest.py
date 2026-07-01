@@ -9,7 +9,7 @@ import asyncio
 
 import pytest
 
-from twitch import Bot
+from hypixelbot.twitch import Bot
 
 
 def make_bot() -> Bot:
