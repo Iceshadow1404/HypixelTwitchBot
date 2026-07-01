@@ -25,8 +25,6 @@ RUN chmod +x start.sh
 # Disable Python output buffering
 ENV PYTHONUNBUFFERED=1
 
-# Config dir for links/debug log — preserves the previously hard-coded /config
-# volume mount used in production.
 ENV CONFIG_DIR=/config
 
 # Run both scripts
