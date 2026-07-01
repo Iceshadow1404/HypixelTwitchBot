@@ -1,13 +1,8 @@
 import json
-import os
 import traceback
 from typing import TypedDict
 
-import aiohttp
-from dotenv import load_dotenv
 from twitchio.ext import commands
-
-import constants
 
 
 class LevelingData(TypedDict):
@@ -75,65 +70,6 @@ def _find_latest_profile(profiles: list, player_uuid: str) -> dict | None:
 
     print(f"[DEBUG][Profile] No suitable profile found for UUID {player_uuid}.")
     return None
-
-
-async def _get_skyblock_data(hypixel_api_key, uuid: str) -> list | None:
-    """Gets SkyBlock profile data for a given UUID using Hypixel API."""
-    if not hypixel_api_key:
-        print("[ERROR][API] Hypixel API Key not configured.")
-        return None
-
-    params = {"key": hypixel_api_key, "uuid": uuid}
-    print(f"[DEBUG][API] Hypixel profiles request for UUID '{uuid}'...")
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(constants.HYPIXEL_API_URL, params=params) as response:
-                print(f"[DEBUG][API] Hypixel profiles response status: {response.status}")
-                response_text = await response.text()  # Read text first for debugging
-            if response.status == 200:
-                try:
-                    data = json.loads(response_text)
-                    # Save the full response for debugging
-                    debug_file = f"hypixel_response_{uuid}.json"
-                    load_dotenv()
-                    DEBUG = os.getenv("Debug", "false").strip().lower() == "true"
-                    try:
-                        if DEBUG:
-                            with open(debug_file, 'w', encoding='utf-8') as f:
-                                json.dump(data, f, indent=4)
-                            print(f"[DEBUG][API] Hypixel response saved to '{debug_file}'.")
-                    except IOError as io_err:
-                        print(f"[WARN][API] Failed to save debug file '{debug_file}': {io_err}")
-
-                    if data.get("success"):
-                        profiles = data.get('profiles')
-                        if profiles is None:
-                            print(
-                                f"[WARN][API] Hypixel API success, but 'profiles' field is missing or null for {uuid}.")
-                            return []  # Return empty list instead of None if success=true but no profiles
-                        if not isinstance(profiles, list):
-                            print(f"[ERROR][API] Hypixel API success, but 'profiles' is not a list ({type(profiles)}).")
-                            return None
-                        return profiles
-                    else:
-                        reason = data.get('cause', 'Unknown reason')
-                        print(f"[ERROR][API] Hypixel API request failed: {reason}")
-                        return None
-                except json.JSONDecodeError as json_e:
-                    print(f"[ERROR][API] Error decoding Hypixel JSON response: {json_e}")
-                    print(f"--- Response Text Start ---\n{response_text}\n--- Response Text End ---")
-                    return None
-            else:
-                print(f"[ERROR][API] Hypixel API request failed: Status {response.status}")
-                print(f"--- Response Text Start ---\n{response_text}\n--- Response Text End ---")
-                return None
-    except aiohttp.ClientError as e:
-        print(f"[ERROR][API] Network error during Hypixel API request: {e}")
-        return None
-    except Exception as e:
-        print(f"[ERROR][API] Unexpected error during Hypixel API request: {e}")
-        traceback.print_exc()
-        return None
 
 
 async def _parse_command_args(bot, ctx: commands.Context, args: str | None, command_name: str) -> tuple[str, str | None] | None:

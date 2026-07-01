@@ -126,11 +126,6 @@ class CommandsCog(commands.Cog):
         await self.bot.send_message(ctx, "🥚")
     dongo_command.hidden = True
 
-    @commands.command(name='help')
-    async def help_command(self, ctx: commands.Context):
-        """Displays the help message with available commands."""
-        await self.bot._help_command.help_command(ctx)
-
     @commands.command(name='rtca')
     async def rtca_command(self, ctx: commands.Context, *, args: str | None = None):
         """Calculates runs/time until a target Catacombs level average."""
