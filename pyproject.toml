@@ -10,3 +10,13 @@ dependencies = [
     "python-dotenv",
     "requests>=2.32.4",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+# Put the repo root on sys.path so tests can `import twitch`, `utils`, etc.
+pythonpath = ["."]
+testpaths = ["tests"]
