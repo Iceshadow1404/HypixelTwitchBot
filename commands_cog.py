@@ -1,18 +1,6 @@
 from typing import TYPE_CHECKING
 
 from twitchio.ext import commands
-from utils import _parse_command_args
-
-# Import necessary processing functions
-from commands.overflow_skills import process_overflow_skill_command
-from commands.skills import process_skills_command
-from commands.auction_house import process_auctions_command
-from commands.cata import process_dungeon_command
-from commands.sblvl import process_sblvl_command
-from commands.guild import process_guild_command
-from commands.skill_level import skill_level_command
-from commands.secrets import secrets_command
-from commands.coinflip import coinflip
 
 if TYPE_CHECKING:
     from twitch import Bot
@@ -25,16 +13,12 @@ class CommandsCog(commands.Cog):
     @commands.command(name='skills', aliases=['sa'])
     async def skills_command(self, ctx: commands.Context, *, args: str | None = None):
         """Displays the specified player's Hypixel SkyBlock skills."""
-        parsed_args = await _parse_command_args(self.bot, ctx, args, 'skills')
-        if parsed_args is None:
-            return
-        ign, requested_profile_name = parsed_args
-        await process_skills_command(ctx, ign, requested_profile_name=requested_profile_name)
+        await self.bot._skills_command.skills_command(ctx, args=args)
 
     @commands.command(name='skilllevel', aliases=['sl'])
     async def skill_level_command(self, ctx: commands.Context, *, args: str | None = None):
         """Displays the specified player's level for a specific skill."""
-        await skill_level_command(ctx, args)
+        await self.bot._skilllevel_command.skilllevel_command(ctx, args=args)
 
     @commands.command(name='kuudra')
     async def kuudra_command(self, ctx: commands.Context, *, args: str | None = None):
@@ -44,35 +28,22 @@ class CommandsCog(commands.Cog):
     @commands.command(name='oskill', aliases=['skillo', 'oskills', 'skillso', 'overflow'])
     async def overflow_skill_command(self, ctx: commands.Context, *, args: str | None = None):
         """Calculates and displays the specified player's Hypixel SkyBlock overflow skill XP."""
-        parsed_args = await _parse_command_args(self.bot, ctx, args, 'oskill')
-        if parsed_args is None:
-            return
-        ign, requested_profile_name = parsed_args
-        await process_overflow_skill_command(ctx, ign, requested_profile_name=requested_profile_name)
+        await self.bot._oskill_command.overflow_skill_command(ctx, args=args)
 
     @commands.command(name='auctions', aliases=['ah'])
-    async def auctions_command(self, ctx: commands.Context, *, ign: str | None = None):
+    async def auctions_command(self, ctx: commands.Context, *, args: str | None = None):
         """Displays the specified player's active auctions."""
-        # Note: process_auctions_command seems to handle arg parsing internally
-        await process_auctions_command(ctx, ign)
+        await self.bot._auctions_command.auctions_command(ctx, args=args)
 
     @commands.command(name='dungeon', aliases=['dungeons', 'cata'])
     async def dungeon_command(self, ctx: commands.Context, *, args: str | None = None):
         """Displays the specified player's Catacombs stats."""
-        parsed_args = await _parse_command_args(self.bot, ctx, args, 'dungeon')
-        if parsed_args is None:
-            return
-        ign, requested_profile_name = parsed_args
-        await process_dungeon_command(ctx, ign, requested_profile_name=requested_profile_name)
+        await self.bot._dungeon_command.dungeon_command(ctx, args=args)
 
     @commands.command(name='sblvl', aliases=['lvl'])
     async def sblvl_command(self, ctx: commands.Context, *, args: str | None = None):
         """Displays the specified player's SkyBlock level."""
-        parsed_args = await _parse_command_args(self.bot, ctx, args, 'sblvl')
-        if parsed_args is None:
-            return
-        ign, requested_profile_name = parsed_args
-        await process_sblvl_command(ctx, ign, requested_profile_name=requested_profile_name)
+        await self.bot._sblvl_command.sblvl_command(ctx, args=args)
 
     @commands.command(name='classaverage', aliases=['ca'])
     async def classaverage_command(self, ctx: commands.Context, *, args: str | None = None):
@@ -159,8 +130,7 @@ class CommandsCog(commands.Cog):
     @commands.command(name='guild', aliases=['g', 'guildof'])
     async def guild_command(self, ctx: commands.Context, *, args: str | None = None):
         """Displays the Hypixel guild the specified player is in."""
-        # Call the processing function from guild.py, passing context and args
-        await process_guild_command(ctx, args=args)
+        await self.bot._guild_command.guild_command(ctx, args=args)
 
     @commands.command(name='whatdoing', aliases=['wd'])
     async def whatdoing_command(self, ctx: commands.Context, *, args: str | None = None):
@@ -174,12 +144,12 @@ class CommandsCog(commands.Cog):
     @commands.command(name='secrets')
     async def secrets_command(self, ctx: commands.Context, *, args: str | None = None):
         """Displays the specified player's secret amount"""
-        await secrets_command(ctx, args)
+        await self.bot._secrets_command.secrets_command(ctx, args=args)
 
     @commands.command(name='status')
     async def status_command(self, ctx: commands.Context, *, args: str | None = None):
         """Calculates runs/time until a target Catacombs level average."""
-        await self.bot._hypxiel_command.status_command(ctx, args=args)
+        await self.bot._hypixel_command.status_command(ctx, args=args)
 
     @commands.command(name='coinflip')
     async def coinflip_command(self, ctx: commands.Context, *, args: str | None = None):

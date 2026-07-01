@@ -3,6 +3,7 @@ import traceback
 from datetime import datetime
 
 from twitchio.ext import commands
+from utils import _parse_command_args
 
 
 async def process_sblvl_command(ctx: commands.Context, ign: str | None = None, requested_profile_name: str | None = None):
@@ -31,3 +32,17 @@ async def process_sblvl_command(ctx: commands.Context, ign: str | None = None, r
         print(f"[ERROR][SblvlCmd] Unexpected error processing level data: {e}")
         traceback.print_exc()
         await bot.send_message(ctx, "An unexpected error occurred while fetching SkyBlock level.")
+
+
+class SblvlCommand:
+    """Dispatch wrapper for #sblvl; delegates to process_sblvl_command."""
+
+    def __init__(self, bot):
+        self.bot = bot
+
+    async def sblvl_command(self, ctx: commands.Context, *, args: str | None = None):
+        parsed_args = await _parse_command_args(self.bot, ctx, args, 'sblvl')
+        if parsed_args is None:
+            return
+        ign, requested_profile_name = parsed_args
+        await process_sblvl_command(ctx, ign, requested_profile_name=requested_profile_name)

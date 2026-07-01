@@ -13,6 +13,10 @@ class GuildCommand:
     def __init__(self, bot: 'IceBot'):
         self.bot = bot
 
+    async def guild_command(self, ctx: commands.Context, *, args: str | None = None):
+        """Dispatch entry so #guild matches the class-based call convention."""
+        await process_guild_command(ctx, args=args)
+
     async def _fetch_guild_data_by_uuid(self, uuid: str) -> Optional[dict]:
         """Fetches guild data from Hypixel API using player UUID."""
         if not self.bot.hypixel_api_key:

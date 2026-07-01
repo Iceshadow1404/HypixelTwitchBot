@@ -90,3 +90,13 @@ async def process_skill_level_command(ctx: commands.Context, skill_name: str, ig
         print(f"[ERROR][SkillLevelCmd] Unexpected error calculating skill level: {e}")
         traceback.print_exc()
         await bot.send_message(ctx, "An unexpected error occurred while calculating the skill level.")
+
+
+class SkillLevelCommand:
+    """Dispatch wrapper for #skilllevel; delegates to the skill_level_command function."""
+
+    def __init__(self, bot):
+        self.bot = bot
+
+    async def skilllevel_command(self, ctx: commands.Context, *, args: str | None = None):
+        await skill_level_command(ctx, args)

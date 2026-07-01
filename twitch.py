@@ -27,6 +27,13 @@ from commands.rtcl import RtclCommand
 from commands.hypixelstatus import hypixelStatus
 from commands.coinflip import coinflip
 from commands.roll import roll
+from commands.skills import SkillsCommand
+from commands.overflow_skills import OverflowSkillCommand
+from commands.cata import DungeonCommand
+from commands.sblvl import SblvlCommand
+from commands.auction_house import AuctionsCommand
+from commands.secrets import SecretsCommand
+from commands.skill_level import SkillLevelCommand
 from bot_messaging import MessagingMixin
 from bot_profile import ProfileMixin
 from bot_streams import StreamMonitorMixin
@@ -69,9 +76,16 @@ class Bot(EventsMixin, StreamMonitorMixin, ProfileMixin, MessagingMixin, command
         self._guild_command = GuildCommand(self)
         self._whatdoing_command = WhatdoingCommand(self)
         self._rtcl_command = RtclCommand(self)
-        self._hypxiel_command = hypixelStatus(self)
+        self._hypixel_command = hypixelStatus(self)
         self._coinflip_command = coinflip(self)
         self._roll_command = roll(self)
+        self._skills_command = SkillsCommand(self)
+        self._oskill_command = OverflowSkillCommand(self)
+        self._dungeon_command = DungeonCommand(self)
+        self._sblvl_command = SblvlCommand(self)
+        self._auctions_command = AuctionsCommand(self)
+        self._secrets_command = SecretsCommand(self)
+        self._skilllevel_command = SkillLevelCommand(self)
 
         # Store initial channels from .env to avoid leaving them
         self._initial_env_channels = [ch.lower() for ch in initial_channels]

@@ -3,6 +3,7 @@ import traceback
 from datetime import datetime
 
 from twitchio.ext import commands
+from utils import _parse_command_args
 
 from calculations import calculate_dungeon_level, calculate_class_level
 
@@ -50,3 +51,17 @@ async def process_dungeon_command(ctx: commands.Context, ign: str | None = None,
         print(f"[ERROR][DungeonCmd] Unexpected error processing dungeon data: {e}")
         traceback.print_exc()
         await bot.send_message(ctx, "An unexpected error occurred while fetching Catacombs level.")
+
+
+class DungeonCommand:
+    """Dispatch wrapper for #dungeon; delegates to process_dungeon_command."""
+
+    def __init__(self, bot):
+        self.bot = bot
+
+    async def dungeon_command(self, ctx: commands.Context, *, args: str | None = None):
+        parsed_args = await _parse_command_args(self.bot, ctx, args, 'dungeon')
+        if parsed_args is None:
+            return
+        ign, requested_profile_name = parsed_args
+        await process_dungeon_command(ctx, ign, requested_profile_name=requested_profile_name)

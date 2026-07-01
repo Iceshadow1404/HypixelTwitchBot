@@ -3,6 +3,7 @@ import typing
 import traceback
 from typing import Iterator
 from twitchio.ext import commands
+from utils import _parse_command_args
 from utils import LevelingData
 from calculations import calculate_average_skill_level, calculate_skill_level
 from constants import AVERAGE_SKILLS_LIST
@@ -53,3 +54,18 @@ async def process_skills_command(ctx: commands.Context, ign: str | None = None, 
         print(f"[ERROR][SkillsCmd] Unexpected error calculating skills: {e}")
         traceback.print_exc()
         await bot.send_message(ctx, "An unexpected error occurred while calculating skill levels.")
+
+
+class SkillsCommand:
+    """Thin dispatch wrapper so #skills uses the same call convention as the
+    class-based commands. Delegates to the unchanged process_skills_command."""
+
+    def __init__(self, bot):
+        self.bot = bot
+
+    async def skills_command(self, ctx: commands.Context, *, args: str | None = None):
+        parsed_args = await _parse_command_args(self.bot, ctx, args, 'skills')
+        if parsed_args is None:
+            return
+        ign, requested_profile_name = parsed_args
+        await process_skills_command(ctx, ign, requested_profile_name=requested_profile_name)

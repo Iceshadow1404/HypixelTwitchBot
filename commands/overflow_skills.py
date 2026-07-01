@@ -2,6 +2,7 @@ import itertools
 import typing
 from typing import Iterator
 from twitchio.ext import commands
+from utils import _parse_command_args
 from constants import AVERAGE_SKILLS_LIST
 from utils import LevelingData
 
@@ -81,3 +82,17 @@ async def process_overflow_skill_command(ctx: commands.Context, ign: str | None,
     output_message = f"{target_ign}'s overflow skill levels (SA {average_skill_level:.2f}) {skills_str}"
     
     await bot.send_message(ctx, output_message)
+
+
+class OverflowSkillCommand:
+    """Dispatch wrapper for #oskill; delegates to process_overflow_skill_command."""
+
+    def __init__(self, bot):
+        self.bot = bot
+
+    async def overflow_skill_command(self, ctx: commands.Context, *, args: str | None = None):
+        parsed_args = await _parse_command_args(self.bot, ctx, args, 'oskill')
+        if parsed_args is None:
+            return
+        ign, requested_profile_name = parsed_args
+        await process_overflow_skill_command(ctx, ign, requested_profile_name=requested_profile_name)

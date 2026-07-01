@@ -155,3 +155,13 @@ async def process_auctions_command(ctx: commands.Context, ign: str | None = None
         print(f"[ERROR][AuctionsCmd] Unexpected error processing auctions: {e}")
         traceback.print_exc()
         await bot.send_message(ctx, "An unexpected error occurred while fetching auctions.")
+
+
+class AuctionsCommand:
+    """Dispatch wrapper for #auctions; delegates to process_auctions_command."""
+
+    def __init__(self, bot):
+        self.bot = bot
+
+    async def auctions_command(self, ctx: commands.Context, *, args: str | None = None):
+        await process_auctions_command(ctx, args)

@@ -38,3 +38,13 @@ async def secrets_command(ctx: commands.Context, ign: str | None = None, request
         print(f"[ERROR][SkillsCmd] Unexpected error calculating skills: {e}")
         traceback.print_exc()
         await bot.send_message(ctx, "An unexpected error occurred while calculating skill levels.")
+
+
+class SecretsCommand:
+    """Dispatch wrapper for #secrets; delegates to the secrets_command function."""
+
+    def __init__(self, bot):
+        self.bot = bot
+
+    async def secrets_command(self, ctx: commands.Context, *, args: str | None = None):
+        await secrets_command(ctx, args)
