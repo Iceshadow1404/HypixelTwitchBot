@@ -10,6 +10,8 @@ from bot.commands import REGISTRY, CommandContext, CommandSpec
 from bot.config import Settings
 from bot.errors import UserError
 from bot.services import Services, build_services
+from bot.twitch.channels import ChannelManager
+from bot.twitch.streams import StreamScanner
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +24,7 @@ class SkyBot(commands.Bot):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.services: Services | None = None
+        self.channel_manager: ChannelManager | None = None
         self._ready_once = False
         super().__init__(
             token=settings.token,
@@ -72,6 +75,18 @@ class SkyBot(commands.Bot):
 
         asyncio.create_task(self._periodic_cache_cleanup())
         asyncio.create_task(self.services.networth.wait_until_ready())
+
+        if self.settings.local_mode:
+            logger.info("LOCAL MODE: skipping live-stream discovery and monitoring")
+        else:
+            assert self.settings.twitch_client_id and self.settings.twitch_client_secret
+            scanner = StreamScanner(
+                self.settings.twitch_client_id, self.settings.twitch_client_secret, session
+            )
+            self.channel_manager = ChannelManager(self, scanner, self.settings.initial_channels)
+            await self.channel_manager.initial_scan()
+            asyncio.create_task(self.channel_manager.monitor_loop())
+
         logger.info("bot is ready")
 
     async def event_message(self, message) -> None:
@@ -93,6 +108,21 @@ class SkyBot(commands.Bot):
 
     async def event_error(self, error: Exception, data: str | None = None) -> None:
         logger.error("unhandled bot error: %s", error, exc_info=error)
+
+    async def event_channel_joined(self, channel) -> None:
+        channel_name = getattr(channel, "name", str(channel))
+        logger.info("joined channel #%s", channel_name)
+        if self.channel_manager:
+            self.channel_manager.on_joined(channel_name)
+
+    async def event_channel_left(self, channel) -> None:
+        logger.info("left channel #%s", getattr(channel, "name", str(channel)))
+
+    async def event_channel_join_failure(self, channel: str) -> None:
+        if self.channel_manager:
+            self.channel_manager.on_join_failure(channel)
+        else:
+            logger.warning("failed to join channel #%s", channel)
 
     # --- background tasks / lifecycle ---
 
