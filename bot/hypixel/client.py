@@ -10,6 +10,7 @@ from bot.constants import (
     HYPIXEL_ELECTION_URL,
     HYPIXEL_GUILD_API_URL,
     HYPIXEL_MUSEUM_URL,
+    HYPIXEL_STATUS_URL,
 )
 from bot.hypixel.cache import TTLCache
 
@@ -77,11 +78,12 @@ class HypixelClient:
         return data
 
     async def get_guild_by_player(self, uuid: str) -> Json | None:
-        """Guild data for a player, or None if not in a guild or on error."""
-        data = await self._get_json(HYPIXEL_GUILD_API_URL, {"key": self._api_key, "player": uuid})
-        if data is None:
-            return None
-        return data.get("guild")
+        """Full guild response (its 'guild' key is null when the player has no guild); None on error."""
+        return await self._get_json(HYPIXEL_GUILD_API_URL, {"key": self._api_key, "player": uuid})
+
+    async def get_player_status(self, uuid: str) -> Json | None:
+        """Online status ('session' key) for a player; None on error."""
+        return await self._get_json(HYPIXEL_STATUS_URL, {"key": self._api_key, "uuid": uuid})
 
     async def get_election(self) -> Json | None:
         cached = self._election_cache.get("election")

@@ -5,6 +5,8 @@ HYPIXEL_AUCTION_URL = "https://api.hypixel.net/v2/skyblock/auction"
 HYPIXEL_ELECTION_URL = "https://api.hypixel.net/v2/resources/skyblock/election"
 HYPIXEL_MUSEUM_URL = "https://api.hypixel.net/v2/skyblock/museum"
 HYPIXEL_GUILD_API_URL = "https://api.hypixel.net/v2/guild"
+HYPIXEL_STATUS_URL = "https://api.hypixel.net/status"
+HYPIXEL_STATUS_RSS_URL = "https://status.hypixel.net/history.rss"
 
 AVERAGE_SKILLS_LIST = [
     "farming",
