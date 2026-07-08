@@ -45,6 +45,9 @@ class SkyBot(commands.Bot):
             if self.services is None:
                 logger.warning("command %r invoked before bot was ready, ignoring", spec.name)
                 return
+            logger.info(
+                "command %r from %s in #%s (args: %r)", spec.name, ctx.author.name, ctx.channel.name, args
+            )
             cc = CommandContext(ctx, self.services, args, spec)
             try:
                 await spec.handler(cc)

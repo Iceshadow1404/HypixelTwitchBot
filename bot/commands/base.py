@@ -79,6 +79,7 @@ class CommandContext:
         if len(text) > MAX_MESSAGE_LENGTH:
             text = text[: MAX_MESSAGE_LENGTH - 3] + "..."
 
+        logger.info("reply in #%s: %s", self.channel_name, text)
         await asyncio.sleep(0.3)
         # re-fetch the channel object instead of ctx.send; ctx can go stale on busy channels.
         # Any-cast: twitchio's @id_cache decorator hides get_channel's real signature from pyrefly
