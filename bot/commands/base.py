@@ -44,6 +44,19 @@ def command(
     return decorator
 
 
+# invisible characters Twitch clients (Chatterino, 7TV, ...) append to bypass
+# the duplicate-message filter; they break int()/IGN parsing if kept
+_INVISIBLE_CHARS = "\u034f\u200b\u200c\u200d\u2060\ufeff\U000e0000"
+_INVISIBLE_TRANSLATION = dict.fromkeys(map(ord, _INVISIBLE_CHARS))
+
+
+def clean_args(raw_args: str | None) -> str | None:
+    if raw_args is None:
+        return None
+    cleaned = raw_args.translate(_INVISIBLE_TRANSLATION).strip()
+    return cleaned or None
+
+
 class CommandContext:
     """Everything a command handler needs: the twitchio context, shared services, raw args."""
 
@@ -56,7 +69,7 @@ class CommandContext:
     ) -> None:
         self.ctx = ctx
         self.services = services
-        self.raw_args = raw_args
+        self.raw_args = clean_args(raw_args)
         self.spec = spec
 
     @property

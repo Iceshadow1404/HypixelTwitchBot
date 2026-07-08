@@ -28,3 +28,15 @@ def test_too_many_args_raises_with_usage() -> None:
 def test_usage_string_uses_prefix_and_name() -> None:
     cc = FakeCommandContext()
     assert cc.usage == "#test <ign> [profile]"
+
+
+def test_invisible_chat_client_suffixes_are_stripped() -> None:
+    # Chatterino/7TV append invisible chars to bypass Twitch's duplicate filter
+    cc = FakeCommandContext(raw_args="10 \u034f")
+    assert cc.raw_args == "10"
+
+    cc = FakeCommandContext(raw_args="Steve\U000e0000 Apple\u200b")
+    assert cc.parse_ign_profile() == ("Steve", "Apple")
+
+    cc = FakeCommandContext(raw_args="\u034f")
+    assert cc.raw_args is None
