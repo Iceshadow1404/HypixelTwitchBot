@@ -30,9 +30,14 @@ class HypixelClient:
         self._election_cache: TTLCache[Json] = TTLCache(CACHE_TTL)
 
     async def _get_json(self, url: str, params: dict[str, str]) -> Json | None:
-        """Returns the parsed response body on success=true, otherwise None."""
+        """Returns the parsed response body on success=true, otherwise None.
+
+        The API key goes in the `API-Key` header, never a query param — otherwise it
+        would leak into logs via aiohttp exception messages (which render the full URL).
+        """
+        headers = {"API-Key": self._api_key}
         try:
-            async with self._session.get(url, params=params) as response:
+            async with self._session.get(url, params=params, headers=headers) as response:
                 if response.status != 200:
                     body = await response.text()
                     logger.warning("GET %s failed: status %d, body %s", url, response.status, body[:300])
@@ -53,7 +58,7 @@ class HypixelClient:
             if cached is not None:
                 return cached
 
-        data = await self._get_json(HYPIXEL_API_URL, {"key": self._api_key, "uuid": uuid})
+        data = await self._get_json(HYPIXEL_API_URL, {"uuid": uuid})
         if data is None:
             return None
         profiles = data.get("profiles")
@@ -71,7 +76,7 @@ class HypixelClient:
         cached = self._museum_cache.get(cache_key)
         if cached is not None:
             return cached
-        params = {"key": self._api_key, "player": uuid.replace("-", ""), "profile": profile_id}
+        params = {"player": uuid.replace("-", ""), "profile": profile_id}
         data = await self._get_json(HYPIXEL_MUSEUM_URL, params)
         if data is not None:
             self._museum_cache.set(cache_key, data)
@@ -79,11 +84,11 @@ class HypixelClient:
 
     async def get_guild_by_player(self, uuid: str) -> Json | None:
         """Full guild response (its 'guild' key is null when the player has no guild); None on error."""
-        return await self._get_json(HYPIXEL_GUILD_API_URL, {"key": self._api_key, "player": uuid})
+        return await self._get_json(HYPIXEL_GUILD_API_URL, {"player": uuid})
 
     async def get_player_status(self, uuid: str) -> Json | None:
         """Online status ('session' key) for a player; None on error."""
-        return await self._get_json(HYPIXEL_STATUS_URL, {"key": self._api_key, "uuid": uuid})
+        return await self._get_json(HYPIXEL_STATUS_URL, {"uuid": uuid})
 
     async def get_election(self) -> Json | None:
         cached = self._election_cache.get("election")
@@ -95,7 +100,7 @@ class HypixelClient:
         return data
 
     async def get_player_auctions(self, uuid: str) -> list[Json] | None:
-        data = await self._get_json(HYPIXEL_AUCTION_URL, {"key": self._api_key, "player": uuid})
+        data = await self._get_json(HYPIXEL_AUCTION_URL, {"player": uuid})
         if data is None:
             return None
         auctions = data.get("auctions")

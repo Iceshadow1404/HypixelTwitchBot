@@ -46,12 +46,14 @@ class StreamScanner:
 
     @retry_on_network_error(retries=3, delay=5)
     async def _get_access_token(self) -> str | None:
-        params = {
+        # credentials go in the form body, never the query string — a query param would
+        # leak the client secret into logs via aiohttp exception messages (full URL)
+        payload = {
             "client_id": self._client_id,
             "client_secret": self._client_secret,
             "grant_type": "client_credentials",
         }
-        async with self._session.post(TWITCH_TOKEN_URL, params=params) as response:
+        async with self._session.post(TWITCH_TOKEN_URL, data=payload) as response:
             if response.status != 200:
                 logger.error(
                     "failed to get Twitch token: status %d, %s", response.status, await response.text()
