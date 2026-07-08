@@ -4,10 +4,9 @@ from pathlib import Path
 from typing import Any, TypedDict
 
 from bot.constants import AVERAGE_SKILLS_LIST
+from bot.gamedata import data_file_path
 
 logger = logging.getLogger(__name__)
-
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 
 class LevelingData(TypedDict):
@@ -18,13 +17,26 @@ class LevelingData(TypedDict):
     slayer_xp: dict[str, list[int]]
 
 
-def load_leveling_data() -> LevelingData:
-    with open(DATA_DIR / "leveling.json", encoding="utf-8") as f:
+# the upstream NEU catacombs table ends at level 99; extend it so class/cata levels
+# keep working up to 150 (local decision, see commit "Changed max Cata LVL to 150")
+CATACOMBS_OVERFLOW_LEVEL_XP = 200_000_000
+CATACOMBS_TABLE_SIZE = 150
+
+
+def _extend_catacombs_table(catacombs_xp: list[int]) -> list[int]:
+    if not catacombs_xp or len(catacombs_xp) >= CATACOMBS_TABLE_SIZE:
+        return catacombs_xp
+    missing = CATACOMBS_TABLE_SIZE - len(catacombs_xp)
+    return catacombs_xp + [CATACOMBS_OVERFLOW_LEVEL_XP] * missing
+
+
+def load_leveling_data(data_dir: Path | None = None) -> LevelingData:
+    with open(data_file_path("leveling.json", data_dir), encoding="utf-8") as f:
         data = json.load(f)
     return {
         "xp_table": data.get("leveling_xp", []),
         "level_caps": data.get("leveling_caps", {}),
-        "catacombs_xp": data.get("catacombs", []),
+        "catacombs_xp": _extend_catacombs_table(data.get("catacombs", [])),
         "hotm_brackets": data.get("HOTM", []),
         "slayer_xp": data.get("slayer_xp", {}),
     }

@@ -9,6 +9,7 @@ from twitchio.ext import commands
 from bot.commands import REGISTRY, CommandContext, CommandSpec
 from bot.config import Settings
 from bot.errors import UserError
+from bot.gamedata import sync_game_data
 from bot.services import Services, build_services
 from bot.twitch.channels import ChannelManager
 from bot.twitch.streams import StreamScanner
@@ -70,6 +71,7 @@ class SkyBot(commands.Bot):
         self._ready_once = True
 
         session = aiohttp.ClientSession()
+        await sync_game_data(session, self.settings.data_dir)
         self.services = build_services(self.settings, session)
         logger.info("logged in as %s (%s)", self.nick, self.user_id)
 

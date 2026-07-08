@@ -1,25 +1,9 @@
-import json
 import logging
-from pathlib import Path
 
 from bot.commands.base import CommandContext, command
 from bot.errors import UserError
 
 logger = logging.getLogger(__name__)
-
-ISLANDS_FILE = Path(__file__).resolve().parent.parent / "data" / "islands.json"
-
-
-def _load_area_names() -> dict[str, str]:
-    try:
-        with open(ISLANDS_FILE, encoding="utf-8") as f:
-            return json.load(f).get("area_names", {})
-    except (OSError, json.JSONDecodeError) as e:
-        logger.error("failed to load %s: %s", ISLANDS_FILE, e)
-        return {}
-
-
-AREA_NAMES = _load_area_names()
 
 
 @command("link", usage="<minecraft_ign>")
@@ -93,5 +77,5 @@ async def whatdoing(cc: CommandContext) -> None:
 
     game_type = session_data.get("gameType", "Unknown")
     mode = session_data.get("mode", "Unknown")
-    readable_island = AREA_NAMES.get(mode, mode)
+    readable_island = cc.services.area_names.get(mode, mode)
     await cc.reply(f"{target_ign} is currently playing {game_type}, ({readable_island}).")

@@ -24,6 +24,10 @@ IGN (see `#link`).
 ## Architecture
 
 - `bot/` — Python package (twitchio 2.x). Entry point: `python -m bot`.
+- Game data (`leveling.json`, `islands.json`) comes from the
+  [NEU repo](https://github.com/NotEnoughUpdates/NotEnoughUpdates-REPO): the bot downloads
+  fresh copies into `DATA_DIR` on every startup and falls back to the last download
+  (or the bundled files in `bot/data/`) when GitHub is unreachable.
 - `networth.js` — small Node.js service wrapping [skyhelper-networth](https://www.npmjs.com/package/skyhelper-networth)
   on `localhost:3000` (`POST /calculate-networth`, `GET /health`).
 - Both processes run in one container via `start.sh`.
