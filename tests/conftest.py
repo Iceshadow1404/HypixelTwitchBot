@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from typing import cast
 
 import pytest
+from twitchio.ext import commands as twitch_commands
 
 from bot.commands.base import CommandContext, CommandSpec
 from bot.hypixel.leveling import LevelingData, load_leveling_data
@@ -9,6 +10,10 @@ from bot.hypixel.profiles import PlayerProfile
 from bot.services import Services
 
 _LEVELING = load_leveling_data()
+
+
+async def _unused_handler(cc: CommandContext) -> None:
+    raise AssertionError("test spec handler must never be invoked")
 
 
 @pytest.fixture(scope="session")
@@ -33,8 +38,10 @@ class FakeCommandContext(CommandContext):
             bot=None,
         )
         fake_services = SimpleNamespace(leveling=_LEVELING)
-        fake_spec = spec or CommandSpec(name="test", handler=None, usage="<ign> [profile]")  # type: ignore[arg-type]
-        super().__init__(cast("object", fake_ctx), cast(Services, fake_services), raw_args, fake_spec)  # type: ignore[arg-type]
+        fake_spec = spec or CommandSpec(name="test", handler=_unused_handler, usage="<ign> [profile]")
+        super().__init__(
+            cast(twitch_commands.Context, fake_ctx), cast(Services, fake_services), raw_args, fake_spec
+        )
         self.replies: list[str] = []
         self._profile = profile
 
