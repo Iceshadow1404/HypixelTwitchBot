@@ -1,9 +1,13 @@
 const express = require('express');
 const { ProfileNetworthCalculator } = require('skyhelper-networth');
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
 app.use(express.json({ limit: '50mb' }));
+
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
 
 app.post('/calculate-networth', async (req, res) => {
   try {
@@ -36,21 +40,6 @@ app.post('/calculate-networth', async (req, res) => {
     // Calculate the networth
     const networth = await networthManager.getNetworth();
     const nonCosmeticNetworth = await networthManager.getNonCosmeticNetworth();
-
-    /*
-    // Debug logging for the nonCosmeticNetworth object
-    console.log('Debug - nonCosmeticNetworth object structure:');
-    console.log(JSON.stringify(nonCosmeticNetworth, null, 2));
-
-    // Debug specific properties
-    console.log('Debug - nonCosmeticNetworth.networth:', nonCosmeticNetworth.networth);
-    console.log('Debug - nonCosmeticNetworth.nonCosmeticNetworth:', nonCosmeticNetworth.nonCosmeticNetworth);
-
-    // Debug logging for the networth object for comparison
-    console.log('Debug - networth object reference:');
-    console.log('networth.networth:', networth.networth);
-    */
-
 
     // Return the calculation results
     const response = {

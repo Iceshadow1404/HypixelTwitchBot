@@ -1,6 +1,12 @@
-*.json
-!leveling.json
 .env
 .idea/
-__pycache__
-node_modules
+__pycache__/
+node_modules/
+.venv/
+.pytest_cache/
+.ruff_cache/
+data.json
+hypixel_response_*.json
+user_links.json
+config/
+data/
