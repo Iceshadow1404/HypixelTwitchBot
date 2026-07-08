@@ -2,7 +2,7 @@ name: Build and Push to GHCR
 
 on:
   push:
-    branches: [ master ]
+    branches: [ '**' ]
   pull_request:
     branches: [ master ]
 
@@ -50,19 +50,27 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract repository name and convert to lowercase
-        id: repo-name
+      - name: Compute image tags
+        id: image
+        env:
+          REPO_OWNER: ${{ github.repository_owner }}
+          BRANCH_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
         run: |
-          REPO_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          echo "repo_owner_lowercase=$REPO_OWNER" >> $GITHUB_OUTPUT
+          OWNER=$(echo "$REPO_OWNER" | tr '[:upper:]' '[:lower:]')
+          IMAGE="ghcr.io/$OWNER/hypixelskyblock"
+          if [ "$BRANCH_NAME" = "master" ]; then
+            echo "tags=$IMAGE:latest,$IMAGE:$COMMIT_SHA" >> $GITHUB_OUTPUT
+          else
+            SAFE_BRANCH=$(echo "$BRANCH_NAME" | tr -c 'a-zA-Z0-9._\n' '-' | tr '[:upper:]' '[:lower:]')
+            echo "tags=$IMAGE:$SAFE_BRANCH" >> $GITHUB_OUTPUT
+          fi
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
         with:
           context: .
           push: true
-          tags: |
-            ghcr.io/${{ steps.repo-name.outputs.repo_owner_lowercase }}/hypixelskyblock:latest
-            ghcr.io/${{ steps.repo-name.outputs.repo_owner_lowercase }}/hypixelskyblock:${{ github.sha }}
+          tags: ${{ steps.image.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
