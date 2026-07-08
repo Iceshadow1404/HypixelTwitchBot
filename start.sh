@@ -1,4 +1,3 @@
-#!/bin/bash
-
+#!/bin/sh
 node networth.js &
-python -u main.py
+exec python -m bot
