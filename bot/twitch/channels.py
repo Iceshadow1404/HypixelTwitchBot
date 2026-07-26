@@ -28,6 +28,17 @@ class ChannelManager:
         self._join_attempts: dict[str, int] = {}
         self.blacklisted: set[str] = set()
         self._pending_leave: dict[str, float] = {}
+        self._last_socket = self._current_socket()
+
+    def _current_socket(self) -> object | None:
+        return getattr(self._bot._connection, "_websocket", None)
+
+    def _reconnected(self) -> bool:
+        socket = self._current_socket()
+        if socket is self._last_socket:
+            return False
+        self._last_socket = socket
+        return True
 
     def _connected_names(self) -> set[str]:
         return {ch.name for ch in self._bot.connected_channels if ch is not None}
@@ -97,7 +108,14 @@ class ChannelManager:
             return
 
         now = time.time()
-        connected_names = self._connected_names()
+        if self._reconnected():
+            logger.warning("websocket reconnected, rejoining all live channels")
+            # a reconnect storm times out pending joins; those must not count towards blacklisting
+            self._join_attempts.clear()
+            self._pending_leave.clear()
+            connected_names: set[str] = set()
+        else:
+            connected_names = self._connected_names()
         live_set = set(live_streamers)
 
         to_join = [name for name in live_streamers if name not in connected_names]
