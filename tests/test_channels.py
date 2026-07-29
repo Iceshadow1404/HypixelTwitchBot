@@ -1,3 +1,4 @@
+import time
 from typing import Any, cast
 
 from bot.twitch.channels import MAX_JOIN_ATTEMPTS, ChannelManager
@@ -57,6 +58,19 @@ async def test_rejoins_live_channels_after_reconnect() -> None:
     bot.reconnect()
     await manager._monitor_once()
     assert bot.joined == ["streamer"]
+
+
+async def test_blacklist_expires_and_channel_is_retried() -> None:
+    manager, bot = _manager(cached=[], live=["streamer"])
+    for _ in range(MAX_JOIN_ATTEMPTS):
+        manager.on_join_failure("streamer")
+    await manager.safe_join(["streamer"])
+    assert bot.joined == []
+
+    manager.blacklisted["streamer"] = time.time() - 1
+    await manager.safe_join(["streamer"])
+    assert bot.joined == ["streamer"]
+    assert manager.blacklisted == {}
 
 
 async def test_reconnect_resets_join_attempts() -> None:

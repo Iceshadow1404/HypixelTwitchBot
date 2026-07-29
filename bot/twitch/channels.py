@@ -13,6 +13,7 @@ MONITOR_INTERVAL = 120
 MONITOR_ERROR_RETRY = 300
 OFFLINE_TIMEOUT_MINUTES = 15
 MAX_JOIN_ATTEMPTS = 5
+BLACKLIST_MINUTES = 60
 
 
 class ChannelManager:
@@ -26,7 +27,8 @@ class ChannelManager:
         # channels from the .env config are never left
         self._protected = {ch.lower() for ch in protected_channels}
         self._join_attempts: dict[str, int] = {}
-        self.blacklisted: set[str] = set()
+        # blocked channel -> timestamp when it may be retried; join timeouts are usually transient
+        self.blacklisted: dict[str, float] = {}
         self._pending_leave: dict[str, float] = {}
         self._last_socket = self._current_socket()
 
@@ -53,14 +55,27 @@ class ChannelManager:
         logger.warning("failed to join #%s (attempt %d/%d)", channel_name, attempts, MAX_JOIN_ATTEMPTS)
 
         if attempts >= MAX_JOIN_ATTEMPTS:
-            self.blacklisted.add(channel_lower)
+            self.blacklisted[channel_lower] = time.time() + BLACKLIST_MINUTES * 60
             del self._join_attempts[channel_lower]
             logger.error(
-                "channel #%s blacklisted after %d failed attempts (until restart)", channel_name, attempts
+                "channel #%s blacklisted after %d failed attempts (for %d min)",
+                channel_name,
+                attempts,
+                BLACKLIST_MINUTES,
             )
 
+    def _is_blacklisted(self, channel_name: str) -> bool:
+        blocked_until = self.blacklisted.get(channel_name.lower())
+        if blocked_until is None:
+            return False
+        if time.time() < blocked_until:
+            return True
+        del self.blacklisted[channel_name.lower()]
+        logger.info("blacklist for #%s expired, retrying", channel_name)
+        return False
+
     async def safe_join(self, channels: list[str]) -> None:
-        channels_to_join = [ch for ch in channels if ch.lower() not in self.blacklisted]
+        channels_to_join = [ch for ch in channels if not self._is_blacklisted(ch)]
         skipped = len(channels) - len(channels_to_join)
         if skipped:
             logger.info("skipped %d blacklisted channels", skipped)
