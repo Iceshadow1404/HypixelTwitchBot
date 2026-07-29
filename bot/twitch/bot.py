@@ -27,6 +27,7 @@ class SkyBot(commands.Bot):
         self.services: Services | None = None
         self.channel_manager: ChannelManager | None = None
         self._ready_once = False
+        self._background_tasks: list[asyncio.Task[None]] = []
         super().__init__(
             token=settings.token,
             prefix=settings.prefix,
@@ -78,7 +79,7 @@ class SkyBot(commands.Bot):
         connected = [ch.name for ch in self.connected_channels if ch is not None]
         logger.info("joined initial channels: %s", connected)
 
-        asyncio.create_task(self._periodic_cache_cleanup())
+        self._background_tasks.append(asyncio.create_task(self._periodic_cache_cleanup()))
         asyncio.create_task(self.services.networth.wait_until_ready())
 
         if self.settings.local_mode:
@@ -90,7 +91,7 @@ class SkyBot(commands.Bot):
             )
             self.channel_manager = ChannelManager(self, scanner, self.settings.initial_channels)
             await self.channel_manager.initial_scan()
-            asyncio.create_task(self.channel_manager.monitor_loop())
+            self._background_tasks.append(asyncio.create_task(self.channel_manager.monitor_loop()))
 
         logger.info("bot is ready")
 
@@ -144,6 +145,10 @@ class SkyBot(commands.Bot):
 
     async def close(self) -> None:
         logger.info("shutting down bot")
+        # stop the monitor before the connection goes away, otherwise its in-flight JOIN/PART
+        # writes land on a closing transport
+        for task in self._background_tasks:
+            task.cancel()
         if self.services and not self.services.session.closed:
             await self.services.session.close()
         await super().close()
