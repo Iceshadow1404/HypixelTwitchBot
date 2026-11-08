@@ -1,12 +1,14 @@
-FROM python:3.12-slim
+FROM node:24.22.2-trixie-slim AS node
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+FROM python:3.12.16-slim-trixie
 
-# Install Node.js (v18 LTS) for the networth service
-RUN apt-get update && apt-get install -y curl gnupg && \
-    curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
-    apt-get install -y nodejs && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+COPY --from=ghcr.io/astral-sh/uv:0.13.7 /uv /uvx /bin/
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -14,9 +16,7 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
-# Node dependencies for networth.js
-COPY package.json package-lock.json ./
-RUN npm ci
+COPY --from=node /app/node_modules ./node_modules
 
 COPY . .
 RUN chmod +x start.sh

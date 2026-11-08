@@ -71,7 +71,7 @@ services:
 
 ## Local development
 
-Requires [uv](https://docs.astral.sh/uv/) and Node.js 18+.
+Requires [uv](https://docs.astral.sh/uv/) and Node.js 24.
 
 ```bash
 uv sync                       # install Python deps
